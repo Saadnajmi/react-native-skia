@@ -419,12 +419,12 @@ export const configurations: Record<PlatformName, Platform> = {
       },
   "windows": {
     targets: {
-      "x64-windows": {
+      x64: {
         cpu: "x64",
         platform: "win",
         output: "x64",
       },
-      "arm64-windows": {
+      arm64: {
         cpu: "arm64",
         platform: "win",
         output: "arm64",

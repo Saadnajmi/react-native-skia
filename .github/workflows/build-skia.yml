@@ -186,10 +186,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - target: "windows-x64-windows"
+          - target: "windows-x64"
             artifact_name: "skia-windows-x64"
             package_root: "packages/skia/libs/windows/x64"
-          - target: "windows-arm64-windows"
+          - target: "windows-arm64"
             artifact_name: "skia-windows-arm64"
             package_root: "packages/skia/libs/windows/arm64"
       fail-fast: false
