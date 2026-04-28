@@ -342,6 +342,9 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
     (bt) => bt.platform === "windows"
   );
   if (hasWindows) {
+    // Skip the dng_sdk static_library on Windows — its bundled
+    // dng_pthread.cpp uses std::auto_ptr (removed in C++17) and won't
+    // compile under MSVC/clang-cl.
     const dngSdkBuildGn = `${SkiaSrc}/third_party/dng_sdk/BUILD.gn`;
     const dngContent = fs.readFileSync(dngSdkBuildGn, "utf-8");
     if (
@@ -354,6 +357,28 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
       );
       fs.writeFileSync(dngSdkBuildGn, patched);
       console.log("Patched third_party/dng_sdk/BUILD.gn (enabled = !is_win)");
+    }
+
+    // Even with skia_use_dng_sdk=false the optional("raw") consumer in
+    // Skia's main BUILD.gn somehow keeps SkRawCodec.cpp in the compile
+    // graph (the empty-stub branch of the optional() template should drop
+    // sources, but doesn't here). Force-disable raw on Windows by ANDing
+    // !is_win into its `enabled = ...` gate.
+    const skiaBuildGn = `${SkiaSrc}/BUILD.gn`;
+    const skiaContent = fs.readFileSync(skiaBuildGn, "utf-8");
+    const rawEnabledLine =
+      "enabled = skia_use_dng_sdk && skia_use_libjpeg_turbo_decode && skia_use_piex";
+    const rawEnabledLineWin =
+      "enabled = !is_win && skia_use_dng_sdk && skia_use_libjpeg_turbo_decode && skia_use_piex";
+    if (
+      skiaContent.includes(rawEnabledLine) &&
+      !skiaContent.includes(rawEnabledLineWin)
+    ) {
+      fs.writeFileSync(
+        skiaBuildGn,
+        skiaContent.replace(rawEnabledLine, rawEnabledLineWin)
+      );
+      console.log("Patched BUILD.gn optional(\"raw\") to disable on Windows");
     }
   }
 
