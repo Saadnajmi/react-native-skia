@@ -271,11 +271,19 @@ const appleCommonArgs: Arg[] = [
 // Paragraph support reuses the Apple flavor (libgrapheme + skparagraph) which is
 // portable, doesn't require a system ICU on the build machine, and produces a
 // minimal binary footprint.
+//
+// DNG/PIEX (Adobe DNG raw-image decoding) are disabled because Skia's bundled
+// dng_sdk has a broken Windows pthread polyfill (`dng_pthread.cpp` fails to
+// compile under MSVC/clang-cl with `'resultHolder': undeclared identifier`).
+// Raw image support isn't part of this port's surface area; Phase 2+ can revisit
+// once Skia or dng_sdk publishes a fix.
 const windowsCommonArgs: Arg[] = [
   ["skia_use_direct3d", !GRAPHITE],
   ["skia_use_metal", false],
   ["skia_use_gl", false],
   ["skia_use_angle", false],
+  ["skia_use_dng_sdk", false],
+  ["skia_use_piex", false],
   ["is_clang", true],
   ["clang_use_chrome_plugins", false],
   ...ParagraphArgsApple,
