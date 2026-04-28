@@ -33,6 +33,7 @@
     "jestEnv.js",
     "cpp/**/*.{h,cpp}",
     "apple/**",
+    "windows/**",
     "react-native-skia.podspec",
     "dist/**"
   ],
@@ -49,9 +50,10 @@
     "copy-skia-headers": "tsx ./scripts/copy-skia-headers.ts",
     "install-skia-graphite": "tsx ./scripts/install-skia-graphite.ts",
     "install-skia": "node scripts/install-libs.js",
-    "clang-format": "yarn clang-format-ios && yarn clang-format-android && yarn clang-format-common",
+    "clang-format": "yarn clang-format-ios && yarn clang-format-android && yarn clang-format-windows && yarn clang-format-common",
     "clang-format-ios": "find apple/ -iname '*.h' -o -iname '*.mm' -o -iname '*.cpp' | xargs clang-format -i",
     "clang-format-android": "find android/cpp/ -iname '*.h' -o -iname '*.m' -o -iname '*.cpp' | xargs clang-format -i",
+    "clang-format-windows": "find windows/ReactNativeSkia -iname '*.h' -o -iname '*.cpp' | xargs clang-format -i",
     "clang-format-common": "find cpp/ \\( -path 'cpp//skia' -prune \\) -o \\( -iname '*.h' -o -iname '*.m' -o -iname '*.cpp' \\) -print | xargs clang-format -i",
     "workflow-copy-libs": "tsx ./scripts/workflow-copy-libs.ts",
     "cpplint": "cpplint --linelength=230 --filter=-legal/copyright,-whitespace/indent,-whitespace/comments,-whitespace/ending_newline,-build/include_order,-runtime/references,-readability/todo,-whitespace/blank_line,-whitespace/todo,-runtime/int,-build/c++11,-whitespace/parens --exclude=package/cpp/skia --exclude=package/ios --exclude=package/android/build --exclude=package/node_modules --recursive package"
@@ -81,13 +83,17 @@
   "peerDependencies": {
     "react": ">=19.0",
     "react-native": ">=0.78",
-    "react-native-reanimated": ">=3.19.1"
+    "react-native-reanimated": ">=3.19.1",
+    "react-native-windows": ">=0.81.0"
   },
   "peerDependenciesMeta": {
     "react-native": {
       "optional": true
     },
     "react-native-reanimated": {
+      "optional": true
+    },
+    "react-native-windows": {
       "optional": true
     }
   },
@@ -151,6 +157,11 @@
         "SkiaPictureView": "SkiaPictureView",
         "SkiaWebGPUView": "SkiaWebGPUView"
       }
+    },
+    "windows": {
+      "namespace": "ReactNativeSkia",
+      "outputDirectory": "windows/ReactNativeSkia/codegen",
+      "separateDataTypes": true
     }
   },
   "react-native-builder-bob": {

@@ -179,3 +179,90 @@ jobs:
           name: ${{ matrix.artifact_name }}
           path: ${{ steps.package.outputs.asset_path }}
           retention-days: 7
+
+  build-windows:
+    needs: prepare-release
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - target: "windows-x64-windows"
+            artifact_name: "skia-windows-x64"
+            package_root: "packages/skia/libs/windows/x64"
+          - target: "windows-arm64-windows"
+            artifact_name: "skia-windows-arm64"
+            package_root: "packages/skia/libs/windows/arm64"
+      fail-fast: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v5.0.0
+        with:
+          submodules: recursive
+
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          download_skia: ${{ github.event.inputs.skip_skia_download == 'true' && 'false' || 'true' }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
+      - name: Setup Ninja
+        uses: seanmiddleditch/gha-setup-ninja@7e868db0f3406270dd46e1dac26c65f621456723 # master
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.11'
+
+      - name: Update depot_tools
+        working-directory: ./externals/depot_tools
+        run: ./update_depot_tools.bat
+        shell: cmd
+
+      # build-skia.ts shells out via spawn(..., { shell: true }) using POSIX
+      # syntax (PATH=... <cmd>); on Windows runners we therefore pin bash so
+      # the existing macOS/Linux command lines work unchanged.
+      - name: Build Skia - ${{ matrix.target }}
+        working-directory: ./packages/skia
+        env:
+          GIT_SYNC_DEPS_SKIP_EMSDK: 'true'
+        run: yarn build-skia ${{ matrix.target }}
+        shell: bash
+
+      - name: Package binaries - ${{ matrix.artifact_name }}
+        id: package
+        shell: bash
+        run: |
+          set -eo pipefail
+          ROOT="${{ matrix.package_root }}"
+          BASENAME="$(basename "$ROOT")"
+          PARENT="$(dirname "$ROOT")"
+          TAG="${DISPATCH_TAG:-${SKIA_BRANCH_SLUG:-${GITHUB_REF_NAME:-${GITHUB_SHA}}}}"
+          ARCHIVE="${{ matrix.artifact_name }}-${TAG}.tar.gz"
+          mkdir -p release-assets
+          tar -czf "release-assets/$ARCHIVE" -C "$PARENT" "$BASENAME"
+          echo "asset_path=release-assets/$ARCHIVE" >> "$GITHUB_OUTPUT"
+          echo "asset_name=$ARCHIVE" >> "$GITHUB_OUTPUT"
+        env:
+          DISPATCH_TAG: ${{ needs.prepare-release.outputs.tag_name }}
+          SKIA_BRANCH_SLUG: ${{ needs.prepare-release.outputs.skia_branch_slug }}
+
+      - name: Upload binaries to GitHub release - ${{ matrix.artifact_name }}
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ needs.prepare-release.outputs.tag_name }}
+          files: ${{ steps.package.outputs.asset_path }}
+          prerelease: true
+
+      - name: Upload binaries as workflow artifact (dry run) - ${{ matrix.artifact_name }}
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ steps.package.outputs.asset_path }}
+          retention-days: 7

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\PlatformContext">
+      <UniqueIdentifier>{a1b2c3d4-1111-2222-3333-444455556666}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Renderer">
+      <UniqueIdentifier>{a1b2c3d4-2222-3333-4444-555566667777}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\View">
+      <UniqueIdentifier>{a1b2c3d4-3333-4444-5555-666677778888}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="pch.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="ReactPackageProvider.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="RNSkiaModule.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="SkiaManager.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="RNSkWindowsPlatformContext.cpp"><Filter>Source Files\PlatformContext</Filter></ClCompile>
+    <ClCompile Include="D3D12WindowContext.cpp"><Filter>Source Files\Renderer</Filter></ClCompile>
+    <ClCompile Include="RNSkD3D12CanvasProvider.cpp"><Filter>Source Files\Renderer</Filter></ClCompile>
+    <ClCompile Include="SkiaPictureView.cpp"><Filter>Source Files\View</Filter></ClCompile>
+    <ClCompile Include="SkiaPictureViewComponent.cpp"><Filter>Source Files\View</Filter></ClCompile>
+    <ClCompile Include="ViewScreenshotService.cpp"><Filter>Source Files\View</Filter></ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="pch.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="ReactPackageProvider.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="RNSkiaModule.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="SkiaManager.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="RNSkWindowsPlatformContext.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="D3D12WindowContext.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="RNSkD3D12CanvasProvider.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="SkiaPictureView.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="SkiaPictureViewComponent.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="ViewScreenshotService.h"><Filter>Header Files</Filter></ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+</Project>

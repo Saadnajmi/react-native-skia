@@ -13,6 +13,7 @@ import {
   copyHeaders,
   GRAPHITE,
   isApplePlatform,
+  isWindowsPlatform,
   MACCATALYST,
   OutFolder,
   PackageRoot,
@@ -98,10 +99,9 @@ export const buildPlatform = async (
     platform,
     targetName
   )}`;
-  await runAsync(
-    command,
-    `${platform === "android" ? "🤖" : "🍏"} ${targetName}`
-  );
+  const emoji =
+    platform === "android" ? "🤖" : platform === "windows" ? "🪟" : "🍏";
+  await runAsync(command, `${emoji} ${targetName}`);
 };
 
 export const copyLib = (
@@ -479,7 +479,7 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
       await configurePlatform(platform, configuration, target);
       await buildPlatform(platform, target);
       process.chdir(ProjectRoot);
-      if (platform === "android") {
+      if (platform === "android" || isWindowsPlatform(platform)) {
         copyLib(
           platform,
           target,

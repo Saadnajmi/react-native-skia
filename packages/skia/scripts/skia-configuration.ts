@@ -70,6 +70,7 @@ const ParagraphOutputsAndroid = BUILD_WITH_PARAGRAPH
 
 const DawnOutputApple = GRAPHITE ? ["libdawn_combined.a"] : [];
 const DawnOutputAndroid = GRAPHITE ? ["libdawn_combined.a"] : [];
+const DawnOutputWindows = GRAPHITE ? ["dawn_combined.lib"] : [];
 
 export const commonArgs = [
   ["skia_use_piex", true],
@@ -97,13 +98,17 @@ export type PlatformName =
   | "apple-tvos"
   | "apple-macos"
   | "apple-maccatalyst"
-  | "android";
+  | "android"
+  | "windows";
 
 export type ApplePlatformName = Extract<PlatformName, `apple-${string}`>;
 
 export const isApplePlatform = (
   name: PlatformName
 ): name is ApplePlatformName => name.startsWith("apple-");
+
+export const isWindowsPlatform = (name: PlatformName): name is "windows" =>
+  name === "windows";
 
 type Arg = (string | boolean | number)[];
 export type Target = {
@@ -247,6 +252,36 @@ const appleCommonArgs: Arg[] = [
   ...ParagraphArgsApple,
 ];
 
+// Common Windows build arguments. On Windows we use:
+//   - Ganesh:   Skia's native Direct3D 12 backend (skia_use_direct3d = true)
+//   - Graphite: Dawn, which targets D3D12 on Windows by default
+// Both routes ultimately render through D3D12; ANGLE/GL is intentionally avoided.
+//
+// Paragraph support reuses the Apple flavor (libgrapheme + skparagraph) which is
+// portable, doesn't require a system ICU on the build machine, and produces a
+// minimal binary footprint.
+const windowsCommonArgs: Arg[] = [
+  ["skia_use_direct3d", !GRAPHITE],
+  ["skia_use_metal", false],
+  ["skia_use_gl", false],
+  ["skia_use_angle", false],
+  ["is_clang", true],
+  ["clang_use_chrome_plugins", false],
+  ...ParagraphArgsApple,
+];
+
+const windowsOutputNames = [
+  "skia.lib",
+  "skshaper.lib",
+  "svg.lib",
+  "skottie.lib",
+  "sksg.lib",
+  ...(BUILD_WITH_PARAGRAPH
+    ? ["skparagraph.lib", "skunicode_core.lib", "skunicode_libgrapheme.lib"]
+    : []),
+  ...DawnOutputWindows,
+];
+
 // Common Apple output names shared across all Apple platforms
 const appleOutputNames = [
   "libskia.a",
@@ -382,6 +417,23 @@ export const configurations: Record<PlatformName, Platform> = {
         outputRoot: "libs/maccatalyst",
         outputNames: [],
       },
+  "windows": {
+    targets: {
+      "x64-windows": {
+        cpu: "x64",
+        platform: "win",
+        output: "x64",
+      },
+      "arm64-windows": {
+        cpu: "arm64",
+        platform: "win",
+        output: "arm64",
+      },
+    },
+    args: windowsCommonArgs,
+    outputRoot: "libs/windows",
+    outputNames: windowsOutputNames,
+  },
 };
 
 const copyModule = (module: string) => {

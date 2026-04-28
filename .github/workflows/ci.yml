@@ -11,6 +11,7 @@ on:
   merge_group:
     types:
       - checks_requested
+  workflow_dispatch: {}
 
 concurrency:
   group: ${{ github.ref }}
@@ -33,6 +34,9 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
       - run: pip install cpplint
       - run: cpplint --linelength=230 --filter=-legal/copyright,-whitespace/indent,-whitespace/comments,-whitespace/ending_newline,-build/include_order,-runtime/references,-readability/todo,-whitespace/blank_line,-whitespace/todo,-runtime/int,-build/c++11,-whitespace/parens --exclude=package/cpp/skia --exclude=package/apple --exclude=package/android/build --exclude=package/node_modules --recursive package
+      - name: cpplint windows native module
+        run: cpplint --linelength=230 --filter=-legal/copyright,-whitespace/indent,-whitespace/comments,-whitespace/ending_newline,-build/include_order,-runtime/references,-readability/todo,-whitespace/blank_line,-whitespace/todo,-runtime/int,-build/c++11,-whitespace/parens,-build/c++17,-build/include_subdir,-build/include_what_you_use --recursive packages/skia/windows/ReactNativeSkia
+        continue-on-error: true
 
       - name: Install clang-format
         run: sudo apt-get update && sudo apt-get install -y clang-format-18
@@ -132,6 +136,48 @@ jobs:
 
       - name: Build package
         run: yarn build
+
+      - name: Validate solution + project XML
+        shell: bash
+        run: |
+          set -euo pipefail
+          choco install -y xmlstarlet >/dev/null
+          xmlstarlet val packages/skia/windows/ReactNativeSkia/ReactNativeSkia.vcxproj
+          xmlstarlet val packages/skia/windows/ReactNativeSkia/ReactNativeSkia.vcxproj.filters
+          # .sln is not XML; just sanity-check the GUID is present.
+          grep -q "{6F7E8E3A-2B6F-4A3A-9E23-2F1A5D3C0001}" packages/skia/windows/ReactNativeSkia.sln
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2.0.0
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@a21f25cd3998bf370fde17e3f1b4c12c175172f9 # v2.0.0
+
+      - name: Restore NuGet packages
+        working-directory: packages/skia/windows
+        run: nuget restore ReactNativeSkia.sln
+
+      # Compile the native Windows module without linking. The link step
+      # cannot succeed until a Skia prebuilt for windows/{x64,arm64} is
+      # published — that's tracked separately via `build-skia.yml`'s
+      # `build-windows` job. The compile step alone catches:
+      #   - Windows SDK / cppwinrt header mismatches
+      #   - Microsoft.ReactNative API drift
+      #   - Skia header path / inclusion errors
+      #   - C++20 + Skia source-level breakages
+      # Failures here are real signal even though linker errors are not.
+      - name: Compile ReactNativeSkia (no link, x64 Debug)
+        working-directory: packages/skia/windows
+        continue-on-error: true
+        run: msbuild ReactNativeSkia.sln /p:Configuration=Debug /p:Platform=x64 /t:ClCompile /v:normal /bl:msbuild-x64-debug.binlog
+
+      - name: Upload MSBuild binlog
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v6.0.0
+        with:
+          name: msbuild-windows-binlog
+          path: packages/skia/windows/msbuild-x64-debug.binlog
+          if-no-files-found: warn
 
   build-android:
     runs-on: ubuntu-latest

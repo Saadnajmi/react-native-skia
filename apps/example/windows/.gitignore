@@ -26,6 +26,9 @@ packages/
 *.binlog
 *.hprof
 *.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
 ExperimentalFeatures.props
 NuGet.Config
 dist/

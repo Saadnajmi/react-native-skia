@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="Globals">
+    <CppWinRTOptimized>true</CppWinRTOptimized>
+    <CppWinRTRootNamespaceAutoMerge>true</CppWinRTRootNamespaceAutoMerge>
+    <MinimalCoreWin>true</MinimalCoreWin>
+    <ProjectGuid>{6f7e8e3a-2b6f-4a3a-9e23-2f1a5d3c0001}</ProjectGuid>
+    <ProjectName>ReactNativeSkia</ProjectName>
+    <RootNamespace>ReactNativeSkia</RootNamespace>
+    <DefaultLanguage>en-US</DefaultLanguage>
+    <MinimumVisualStudioVersion>17.0</MinimumVisualStudioVersion>
+    <AppContainerApplication>true</AppContainerApplication>
+    <ApplicationType>Windows Store</ApplicationType>
+    <ApplicationTypeRevision>10.0</ApplicationTypeRevision>
+    <WindowsTargetPlatformVersion Condition="'$(WindowsTargetPlatformVersion)' == ''">10.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformMinVersion>10.0.19041.0</WindowsTargetPlatformMinVersion>
+    <UseWinUI>true</UseWinUI>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <GenerateManifest>false</GenerateManifest>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Debug'">true</UseDebugLibraries>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Release'">false</UseDebugLibraries>
+    <WholeProgramOptimization Condition="'$(Configuration)'=='Release'">true</WholeProgramOptimization>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+
+  <ImportGroup Label="ExtensionSettings" />
+
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="packages\Microsoft.Windows.CppWinRT.2.0.240405.15\build\native\Microsoft.Windows.CppWinRT.props" Condition="Exists('packages\Microsoft.Windows.CppWinRT.2.0.240405.15\build\native\Microsoft.Windows.CppWinRT.props')" />
+    <Import Project="packages\Microsoft.ReactNative.0.81.0\build\native\Microsoft.ReactNative.props" Condition="Exists('packages\Microsoft.ReactNative.0.81.0\build\native\Microsoft.ReactNative.props')" />
+    <Import Project="packages\Microsoft.ReactNative.Cxx.0.81.0\build\native\Microsoft.ReactNative.Cxx.props" Condition="Exists('packages\Microsoft.ReactNative.Cxx.0.81.0\build\native\Microsoft.ReactNative.Cxx.props')" />
+  </ImportGroup>
+
+  <PropertyGroup>
+    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\$(ProjectName)\</OutDir>
+    <IntDir>$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+    <SkiaRoot>$(MSBuildThisFileDirectory)..\..\</SkiaRoot>
+    <SkiaCpp>$(SkiaRoot)cpp\</SkiaCpp>
+    <SkiaLibs>$(SkiaRoot)libs\windows\$(Platform)\</SkiaLibs>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalOptions>%(AdditionalOptions) /bigobj /await /utf-8 /permissive-</AdditionalOptions>
+      <PreprocessorDefinitions>SK_GANESH;SK_DIRECT3D;NOMINMAX;WIN32_LEAN_AND_MEAN;_USE_MATH_DEFINES;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(SK_GRAPHITE)'=='1'">SK_GRAPHITE;SK_DAWN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>
+        $(MSBuildThisFileDirectory);
+        $(MSBuildThisFileDirectory)codegen;
+        $(SkiaCpp);
+        $(SkiaCpp)skia;
+        $(SkiaCpp)skia\include;
+        $(SkiaCpp)skia\modules;
+        $(SkiaCpp)skia\modules\skparagraph\include;
+        $(SkiaCpp)skia\modules\skshaper\include;
+        $(SkiaCpp)skia\modules\svg\include;
+        $(SkiaCpp)skia\modules\skottie\include;
+        $(SkiaCpp)rnskia;
+        $(SkiaCpp)api;
+        $(SkiaCpp)jsi;
+        $(SkiaCpp)utils;
+        %(AdditionalIncludeDirectories)
+      </AdditionalIncludeDirectories>
+      <DisableSpecificWarnings>4068;4244;4267;4305;4146;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(SkiaLibs);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>
+        skia.lib;skshaper.lib;svg.lib;skottie.lib;sksg.lib;skparagraph.lib;skunicode_core.lib;skunicode_libgrapheme.lib;
+        d3d12.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;
+        gdi32.lib;user32.lib;dwmapi.lib;windowscodecs.lib;
+        %(AdditionalDependencies)
+      </AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <ItemGroup>
+    <ClCompile Include="pch.cpp">
+      <PrecompiledHeader>Create</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="ReactPackageProvider.cpp" />
+    <ClCompile Include="RNSkiaModule.cpp" />
+    <ClCompile Include="SkiaManager.cpp" />
+    <ClCompile Include="RNSkWindowsPlatformContext.cpp" />
+    <ClCompile Include="D3D12WindowContext.cpp" />
+    <ClCompile Include="RNSkD3D12CanvasProvider.cpp" />
+    <ClCompile Include="SkiaPictureView.cpp" />
+    <ClCompile Include="SkiaPictureViewComponent.cpp" />
+    <ClCompile Include="ViewScreenshotService.cpp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ClInclude Include="pch.h" />
+    <ClInclude Include="ReactPackageProvider.h" />
+    <ClInclude Include="RNSkiaModule.h" />
+    <ClInclude Include="SkiaManager.h" />
+    <ClInclude Include="RNSkWindowsPlatformContext.h" />
+    <ClInclude Include="D3D12WindowContext.h" />
+    <ClInclude Include="RNSkD3D12CanvasProvider.h" />
+    <ClInclude Include="SkiaPictureView.h" />
+    <ClInclude Include="SkiaPictureViewComponent.h" />
+    <ClInclude Include="ViewScreenshotService.h" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="packages\Microsoft.Windows.CppWinRT.2.0.240405.15\build\native\Microsoft.Windows.CppWinRT.targets" Condition="Exists('packages\Microsoft.Windows.CppWinRT.2.0.240405.15\build\native\Microsoft.Windows.CppWinRT.targets')" />
+    <Import Project="packages\Microsoft.ReactNative.0.81.0\build\native\Microsoft.ReactNative.targets" Condition="Exists('packages\Microsoft.ReactNative.0.81.0\build\native\Microsoft.ReactNative.targets')" />
+    <Import Project="packages\Microsoft.ReactNative.Cxx.0.81.0\build\native\Microsoft.ReactNative.Cxx.targets" Condition="Exists('packages\Microsoft.ReactNative.Cxx.0.81.0\build\native\Microsoft.ReactNative.Cxx.targets')" />
+  </ImportGroup>
+
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('packages\Microsoft.Windows.CppWinRT.2.0.240405.15\build\native\Microsoft.Windows.CppWinRT.props')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Microsoft.Windows.CppWinRT.2.0.240405.15\build\native\Microsoft.Windows.CppWinRT.props'))" />
+    <Error Condition="!Exists('packages\Microsoft.ReactNative.0.81.0\build\native\Microsoft.ReactNative.props')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Microsoft.ReactNative.0.81.0\build\native\Microsoft.ReactNative.props'))" />
+    <Error Condition="!Exists('packages\Microsoft.ReactNative.Cxx.0.81.0\build\native\Microsoft.ReactNative.Cxx.props')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Microsoft.ReactNative.Cxx.0.81.0\build\native\Microsoft.ReactNative.Cxx.props'))" />
+  </Target>
+</Project>
