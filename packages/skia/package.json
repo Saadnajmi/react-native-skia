@@ -35,6 +35,7 @@
     "apple/**",
     "windows/**",
     "react-native-skia.podspec",
+    "react-native.config.js",
     "dist/**"
   ],
   "scripts": {

@@ -172,6 +172,145 @@ jobs:
           path: packages/skia/windows/msbuild-x64-debug.binlog
           if-no-files-found: warn
 
+  build-test-windows:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    # The Windows test-app build is exploratory in Phase 1 (RNW autolink
+    # + NuGet version alignment + Fabric component registration drift).
+    # Don't fail the whole CI run on it yet; the binlog/screenshot
+    # artifacts are the deliverable.
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v5.0.0
+        with:
+          submodules: recursive
+
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2.0.0
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@a21f25cd3998bf370fde17e3f1b4c12c175172f9 # v2.0.0
+
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
+      - name: Setup Ninja
+        uses: seanmiddleditch/gha-setup-ninja@7e868db0f3406270dd46e1dac26c65f621456723 # master
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.11'
+
+      - name: Update depot_tools
+        working-directory: ./externals/depot_tools
+        run: ./update_depot_tools.bat
+        shell: cmd
+
+      # Build Skia for windows-x64 inline. Phase 2 will switch this to
+      # download the prebuilt artifact from build-skia.yml's release
+      # publish; that's not blocking on the test-app validation we want
+      # here.
+      - name: Build Skia for Windows x64
+        working-directory: ./packages/skia
+        env:
+          GIT_SYNC_DEPS_SKIP_EMSDK: 'true'
+        run: yarn build-skia windows-x64
+        shell: bash
+
+      # react-native-test-app generates the windows/ host (sln, vcxproj,
+      # autolinking glue). The example app's react-native.config.js
+      # already declares solutionFile: 'windows/example.sln' so RNW CLI
+      # picks it up.
+      - name: Initialize Windows test-app host
+        working-directory: apps/example
+        shell: bash
+        run: |
+          npx --yes react-native-test-app init \
+            --platform windows \
+            --destination . \
+            --force \
+            --name example
+
+      - name: Build Windows test app (with retries)
+        uses: nick-fields/retry@7152eba30c6575329ac0576536151aca5a72780e # v3.0.0
+        with:
+          timeout_minutes: 45
+          max_attempts: 3
+          retry_on: error
+          shell: bash
+          command: |
+            cd apps/example
+            npx react-native run-windows \
+              --arch x64 \
+              --no-launch \
+              --no-deploy \
+              --logging \
+              --msbuildprops "AppxPackageSigningEnabled=false"
+
+      # If the build succeeded, try a deploy + launch + screenshot pass.
+      # Capture is best-effort: failures here mustn't fail the job.
+      - name: Run app and capture screenshot
+        if: success()
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          # Start metro in the background so the JS bundle loads when the
+          # test-app launches.
+          Start-Process -NoNewWindow -FilePath "node" `
+            -ArgumentList "node_modules/react-native/cli.js","start","--port","8081" `
+            -WorkingDirectory "apps/example"
+          Start-Sleep -Seconds 15
+
+          # Launch the built app. react-native-test-app installs to a
+          # known package family; use App-X deploy + Start.
+          Push-Location apps/example
+          try {
+            npx react-native run-windows --arch x64 --logging --no-build --no-autolink
+          } catch {
+            Write-Host "Launch failed: $_"
+          }
+          Pop-Location
+          Start-Sleep -Seconds 30
+
+          Add-Type -AssemblyName System.Windows.Forms
+          Add-Type -AssemblyName System.Drawing
+          $bounds  = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bitmap  = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
+          $graphic = [System.Drawing.Graphics]::FromImage($bitmap)
+          $graphic.CopyFromScreen($bounds.X, $bounds.Y, 0, 0, $bounds.Size)
+          New-Item -ItemType Directory -Force -Path screenshots | Out-Null
+          $bitmap.Save("screenshots/test-app-windows-x64.png")
+          Write-Host "Screenshot saved."
+
+      - name: Upload Windows test app build artifacts
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v6.0.0
+        with:
+          name: test-app-windows-build
+          path: |
+            apps/example/windows/**/*.binlog
+            apps/example/windows/**/*.log
+            apps/example/windows/AppPackages/**
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload Windows test app screenshot
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v6.0.0
+        with:
+          name: test-app-windows-screenshot
+          path: screenshots/**
+          if-no-files-found: warn
+          retention-days: 30
+
   build-android:
     runs-on: ubuntu-latest
     env:
