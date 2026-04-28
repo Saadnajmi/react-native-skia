@@ -99,11 +99,19 @@ export const buildPlatform = async (
   // On Windows we restrict ninja to just the libs we ship. The default `ninja
   // all` target rebuilds every BUILD.gn rule including orphan third-parties
   // (dng_sdk, etc.) whose Windows compatibility is broken in current Skia
-  // even when their consumers are disabled via skia_use_*=false. macOS/Linux
-  // keep the existing default-target behavior.
+  // even when their consumers are disabled via skia_use_*=false.
+  //
+  // We pass ninja the bare target names (no ".lib" suffix). Both file paths
+  // and target/phony names are valid ninja arguments, but target names work
+  // uniformly across Skia's `skia_component` outputs (some land at the build
+  // root, others under obj/<path>/, and the path layout has shifted between
+  // Skia versions). Bare names match the GN target identifiers regardless.
+  // macOS/Linux keep the existing default-target behavior.
   const ninjaTargets =
     platform === "windows"
-      ? ` ${configurations[platform].outputNames.join(" ")}`
+      ? ` ${configurations[platform].outputNames
+          .map((n) => n.replace(/\.lib$/, ""))
+          .join(" ")}`
       : "";
   const command = `PATH=${process.cwd()}/../bin:$PATH ninja -C ${getOutDir(
     platform,
