@@ -99,8 +99,11 @@ export const buildPlatform = async (
     platform,
     targetName
   )}`;
-  const emoji =
-    platform === "android" ? "🤖" : platform === "windows" ? "🪟" : "🍏";
+  const platformEmoji: Record<string, string> = {
+    android: "🤖",
+    windows: "🪟",
+  };
+  const emoji = platformEmoji[platform] ?? "🍏";
   await runAsync(command, `${emoji} ${targetName}`);
 };
 
