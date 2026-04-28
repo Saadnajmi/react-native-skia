@@ -26,8 +26,17 @@ export const runAsync = (command: string, label: string): Promise<void> => {
   return new Promise((resolve, reject) => {
     const [cmd, ...args] = command.split(" ");
     console.log({ cmd, args });
+    // build-skia builds POSIX-style command lines (e.g.
+    // `PATH=../depot_tools/:$PATH gn gen ...`). On macOS/Linux,
+    // spawn(..., {shell: true}) routes through /bin/sh which parses the
+    // `PATH=` prefix correctly. On Windows the same option defaults to
+    // cmd.exe, which interprets `PATH=...` as a `set` and never invokes
+    // the trailing tool. Force bash on Windows so the existing command
+    // lines work unchanged.
+    const shell: true | string =
+      process.platform === "win32" ? "bash" : true;
     const childProcess = spawn(cmd, args, {
-      shell: true,
+      shell,
     });
 
     childProcess.stdout.on("data", (data) => {
@@ -70,7 +79,12 @@ export const checkFileExists = (filePath: string) => {
 
 export const $ = (command: string) => {
   try {
-    return execSync(command);
+    // Same Windows-shell consideration as runAsync: route through bash so
+    // POSIX command lines (PATH=... cmd, here-strings, etc.) work unchanged.
+    return execSync(
+      command,
+      process.platform === "win32" ? { shell: "bash" } : undefined
+    );
   } catch (e) {
     exit(1);
   }
