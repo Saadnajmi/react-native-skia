@@ -386,6 +386,23 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
       );
       console.log("Patched BUILD.gn optional(\"raw\") to disable on Windows");
     }
+
+    // gn/toolchain/BUILD.gn hardcodes the literal string "python3" in the
+    // copy/copy_bundle_data/alink tool commands; --script-executable doesn't
+    // override these. GitHub's windows-latest runners only ship `python.exe`
+    // (no `python3` alias), so the very first ninja `copy` (e.g.
+    // icudtl.dat) errors with `'python3' is not recognized as an internal
+    // or external command`. Replace the bare token on Windows; macOS/Linux
+    // keep python3 because they don't run this patched copy of Skia.
+    const toolchainBuildGn = `${SkiaSrc}/gn/toolchain/BUILD.gn`;
+    const toolchainContent = fs.readFileSync(toolchainBuildGn, "utf-8");
+    if (toolchainContent.includes("python3")) {
+      fs.writeFileSync(
+        toolchainBuildGn,
+        toolchainContent.replace(/\bpython3\b/g, "python")
+      );
+      console.log("Patched gn/toolchain/BUILD.gn (python3 -> python)");
+    }
   }
 
   if (GRAPHITE) {
