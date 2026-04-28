@@ -96,23 +96,28 @@ export const buildPlatform = async (
   // to make sure we can run all scripts that uses #!/usr/bin/env python as shebang
   // https://groups.google.com/g/skia-discuss/c/BYyB-TwA8ow
   //
-  // On Windows we restrict ninja to just the libs we ship. The default `ninja
-  // all` target rebuilds every BUILD.gn rule including orphan third-parties
-  // (dng_sdk, etc.) whose Windows compatibility is broken in current Skia
-  // even when their consumers are disabled via skia_use_*=false.
+  // On Windows we restrict ninja to just the top-level user-facing libs. The
+  // default `ninja all` rebuilds every BUILD.gn rule including orphan
+  // third-parties (dng_sdk, etc.) whose Windows compatibility is broken in
+  // current Skia even when their consumers are disabled via skia_use_*=false.
   //
-  // We pass ninja the bare target names (no ".lib" suffix). Both file paths
-  // and target/phony names are valid ninja arguments, but target names work
-  // uniformly across Skia's `skia_component` outputs (some land at the build
-  // root, others under obj/<path>/, and the path layout has shifted between
-  // Skia versions). Bare names match the GN target identifiers regardless.
+  // We name the GN targets directly (no ".lib" suffix) and only at the
+  // top-level — Skia's nested `skia_component` outputs under modules/* are
+  // not registered as top-level ninja aliases (e.g. `skunicode_libgrapheme`),
+  // but they are pulled in transitively as `public_deps` of `skparagraph`,
+  // so the corresponding .lib files end up on disk for copyLib + the
+  // .vcxproj link inputs even though ninja isn't asked for them by name.
   // macOS/Linux keep the existing default-target behavior.
+  const windowsNinjaTargets = [
+    "skia",
+    "skshaper",
+    "svg",
+    "skottie",
+    "sksg",
+    "skparagraph",
+  ];
   const ninjaTargets =
-    platform === "windows"
-      ? ` ${configurations[platform].outputNames
-          .map((n) => n.replace(/\.lib$/, ""))
-          .join(" ")}`
-      : "";
+    platform === "windows" ? ` ${windowsNinjaTargets.join(" ")}` : "";
   const command = `PATH=${process.cwd()}/../bin:$PATH ninja -C ${getOutDir(
     platform,
     targetName
