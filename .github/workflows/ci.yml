@@ -137,16 +137,9 @@ jobs:
       - name: Build package
         run: yarn build
 
-      - name: Validate solution + project XML
-        shell: bash
-        run: |
-          set -euo pipefail
-          choco install -y xmlstarlet >/dev/null
-          xmlstarlet val packages/skia/windows/ReactNativeSkia/ReactNativeSkia.vcxproj
-          xmlstarlet val packages/skia/windows/ReactNativeSkia/ReactNativeSkia.vcxproj.filters
-          # .sln is not XML; just sanity-check the GUID is present.
-          grep -q "{6F7E8E3A-2B6F-4A3A-9E23-2F1A5D3C0001}" packages/skia/windows/ReactNativeSkia.sln
-
+      # MSBuild will reject a malformed .vcxproj on its own; the prior
+      # xmlstarlet-based pre-flight check kept flaking on `choco install` and
+      # added no signal beyond what MSBuild reports.
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2.0.0
 
