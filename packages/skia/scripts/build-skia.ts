@@ -328,6 +328,35 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
   process.chdir(SkiaSrc);
   $("PATH=../depot_tools/:$PATH python3 tools/git-sync-deps");
   console.log("gclient sync done");
+
+  // Skia's bundled dng_sdk pthread polyfill
+  // (third_party/externals/dng_sdk/source/dng_pthread.cpp) uses std::auto_ptr,
+  // which was removed in C++17 and therefore fails to compile under MSVC /
+  // clang-cl. Setting `enabled = !is_win` on the third_party() target makes
+  // the template emit an empty static_library on Windows; the (empty) target
+  // still exists for any GN dep that points at it, but no Windows-specific
+  // sources get compiled. macOS/Linux/Android continue to build dng_sdk
+  // normally. Raw image decoding (which would consume dng_sdk) is out of
+  // scope for the Windows port; revisit if/when dng_sdk publishes a fix.
+  const hasWindows = buildTargets.some(
+    (bt) => bt.platform === "windows"
+  );
+  if (hasWindows) {
+    const dngSdkBuildGn = `${SkiaSrc}/third_party/dng_sdk/BUILD.gn`;
+    const dngContent = fs.readFileSync(dngSdkBuildGn, "utf-8");
+    if (
+      !dngContent.includes("enabled = !is_win") &&
+      dngContent.includes('third_party("dng_sdk") {')
+    ) {
+      const patched = dngContent.replace(
+        'third_party("dng_sdk") {',
+        'third_party("dng_sdk") {\n  enabled = !is_win'
+      );
+      fs.writeFileSync(dngSdkBuildGn, patched);
+      console.log("Patched third_party/dng_sdk/BUILD.gn (enabled = !is_win)");
+    }
+  }
+
   if (GRAPHITE) {
     console.log("Applying Graphite patches...");
     $(`git reset --hard HEAD`);
