@@ -200,6 +200,25 @@ jobs:
       - name: Setup MSVC environment
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
+      # The runner ships Windows SDK 10.0.26100 only, but
+      # react-native-test-app's template-0.81.x targets
+      # WindowsTargetPlatformVersion=10.0.22621.0 in the generated
+      # ReactApp.vcxproj. Override at msbuild props alone wasn't
+      # enough (the wapproj's Windows App SDK manifest references the
+      # 22621 FrameworkIdentity), so install SDK 22621 alongside.
+      - name: Install Windows 10 SDK 22621 (for test-app)
+        shell: pwsh
+        run: |
+          $vsInstaller = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
+          $vsPath = "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise"
+          $proc = Start-Process -FilePath $vsInstaller -ArgumentList @(
+            "modify",
+            "--installPath",$vsPath,
+            "--add","Microsoft.VisualStudio.Component.Windows11SDK.22621",
+            "--quiet","--norestart","--nocache"
+          ) -Wait -PassThru
+          Write-Host "vs_installer modify exited with $($proc.ExitCode)"
+
       - name: Setup Ninja
         uses: seanmiddleditch/gha-setup-ninja@7e868db0f3406270dd46e1dac26c65f621456723 # master
 
@@ -279,11 +298,8 @@ jobs:
           max_attempts: 3
           retry_on: error
           shell: bash
-          # The test-app template targets WindowsTargetPlatformVersion
-          # 10.0.22621.0 by default but the GitHub Windows runner ships
-          # SDK 10.0.26100.0. Override at the msbuild level so the
-          # project retargets without us having to rewrite the generated
-          # vcxproj.
+          # SDK 10.0.22621 was installed earlier so we can keep the
+          # template's default WindowsTargetPlatformVersion.
           command: |
             cd apps/example
             npx react-native run-windows \
@@ -291,7 +307,7 @@ jobs:
               --no-launch \
               --no-deploy \
               --logging \
-              --msbuildprops "AppxPackageSigningEnabled=false;WindowsTargetPlatformVersion=10.0.26100.0"
+              --msbuildprops "AppxPackageSigningEnabled=false"
 
       # If the build succeeded, try a deploy + launch + screenshot pass.
       # Capture is best-effort: failures here mustn't fail the job.
