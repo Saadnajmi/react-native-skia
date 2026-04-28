@@ -77,10 +77,18 @@ const configurePlatform = async (
 
     // Windows runners ship `python.exe` (no `python3` alias). gn embeds the
     // value of --script-executable into the generated build.ninja `python_path`
-    // variable, so when ninja later spawns `cmd.exe /c python_path ...` for
-    // Skia's Python build helpers (e.g. gn/cp.py for icudtl.dat), an
-    // executable that doesn't exist on PATH causes a hard failure mid-build.
-    const scriptExecutable = platformName === "windows" ? "python" : "python3";
+    // variable; use the absolute path that actions/setup-python populated so
+    // ninja's cmd.exe children can find it regardless of inherited PATH.
+    let scriptExecutable = "python3";
+    if (platformName === "windows") {
+      const pyRoot =
+        process.env.pythonLocation ||
+        process.env.Python_ROOT_DIR ||
+        process.env.Python3_ROOT_DIR;
+      scriptExecutable = pyRoot
+        ? path.join(pyRoot, "python.exe").replace(/\\/g, "/")
+        : "python";
+    }
     const command = `${commandline} ${options} ${targetOptions} --script-executable=${scriptExecutable} --args='target_os="${target.platform}" target_cpu="${target.cpu}" ${common}${args}${targetArgs}'`;
     await runAsync(command, "⚙️");
     return true;
@@ -389,19 +397,34 @@ const buildXCFramework = (platformName: ApplePlatformName) => {
 
     // gn/toolchain/BUILD.gn hardcodes the literal string "python3" in the
     // copy/copy_bundle_data/alink tool commands; --script-executable doesn't
-    // override these. GitHub's windows-latest runners only ship `python.exe`
-    // (no `python3` alias), so the very first ninja `copy` (e.g.
-    // icudtl.dat) errors with `'python3' is not recognized as an internal
-    // or external command`. Replace the bare token on Windows; macOS/Linux
-    // keep python3 because they don't run this patched copy of Skia.
+    // override these. The bare token "python" doesn't reliably resolve from
+    // ninja's cmd.exe child processes either (PATH propagation through
+    // bash -> ninja -> cmd.exe drops the setup-python directory). Replace
+    // with the absolute path to python.exe taken from the environment that
+    // actions/setup-python populated. Other platforms run an unpatched copy
+    // of Skia and continue to use python3.
+    const pythonExe = (() => {
+      const root =
+        process.env.pythonLocation ||
+        process.env.Python_ROOT_DIR ||
+        process.env.Python3_ROOT_DIR;
+      if (root) {
+        // gn requires forward slashes; the value lands inside a build.ninja
+        // command literal that cmd.exe will execute.
+        return path.join(root, "python.exe").replace(/\\/g, "/");
+      }
+      return "python";
+    })();
     const toolchainBuildGn = `${SkiaSrc}/gn/toolchain/BUILD.gn`;
     const toolchainContent = fs.readFileSync(toolchainBuildGn, "utf-8");
     if (toolchainContent.includes("python3")) {
       fs.writeFileSync(
         toolchainBuildGn,
-        toolchainContent.replace(/\bpython3\b/g, "python")
+        toolchainContent.replace(/\bpython3\b/g, pythonExe)
       );
-      console.log("Patched gn/toolchain/BUILD.gn (python3 -> python)");
+      console.log(
+        `Patched gn/toolchain/BUILD.gn (python3 -> ${pythonExe})`
+      );
     }
   }
 
