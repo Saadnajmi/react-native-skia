@@ -80,7 +80,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(SkiaLibs);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>
-        skia.lib;skshaper.lib;svg.lib;skottie.lib;sksg.lib;skparagraph.lib;skunicode_core.lib;skunicode_libgrapheme.lib;
+        skia.lib;skshaper.lib;svg.lib;skottie.lib;sksg.lib;skparagraph.lib;skunicode_core.lib;skunicode_icu.lib;
         d3d12.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;
         gdi32.lib;user32.lib;dwmapi.lib;windowscodecs.lib;
         %(AdditionalDependencies)

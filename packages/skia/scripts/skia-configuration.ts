@@ -289,6 +289,12 @@ const windowsCommonArgs: Arg[] = [
   ...ParagraphArgsApple,
 ];
 
+// On Windows, Skia's GN evaluation ends up building `skunicode_icu` rather
+// than `skunicode_libgrapheme` regardless of which paragraph args we pass
+// (likely a quoting/order quirk in how the multi-line --args= string is
+// flattened through bash on Windows). Both produce a working SkUnicode
+// implementation so Phase 1 ships the icu flavor; revisit when we know
+// which features Phase 2 actually needs.
 const windowsOutputNames = [
   "skia.lib",
   "skshaper.lib",
@@ -296,7 +302,7 @@ const windowsOutputNames = [
   "skottie.lib",
   "sksg.lib",
   ...(BUILD_WITH_PARAGRAPH
-    ? ["skparagraph.lib", "skunicode_core.lib", "skunicode_libgrapheme.lib"]
+    ? ["skparagraph.lib", "skunicode_core.lib", "skunicode_icu.lib"]
     : []),
   ...DawnOutputWindows,
 ];
