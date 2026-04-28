@@ -239,7 +239,7 @@ jobs:
         env:
           YARN_ENABLE_IMMUTABLE_INSTALLS: 'false'
         run: |
-          yarn add --dev react-native@^0.81.0 react-native-windows@^0.81.0
+          yarn add react-native@^0.81.0 react-native-windows@^0.81.0
 
       # react-native-test-app generates the windows/ host (sln, vcxproj,
       # autolinking glue). Pinning --version 0.81 makes init-test-app
