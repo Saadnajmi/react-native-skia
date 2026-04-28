@@ -224,15 +224,27 @@ jobs:
         run: yarn build-skia windows-x64
         shell: bash
 
+      # The example app pins react-native@0.83.1, but
+      # react-native-windows tracks RN versions and the latest published
+      # is 0.81.x. Without a matching RNW init-test-app silently skips
+      # Windows scaffolding ('react-native-windows@0.83 cannot be added
+      # because it does not exist'). Override the example's RN+RNW to
+      # 0.81 for this CI job only (the lockfile change isn't pushed
+      # back). YARN_ENABLE_IMMUTABLE_INSTALLS=false relaxes the
+      # `--immutable` policy the Setup composite enforced for the rest
+      # of the workspace.
+      - name: Override RNW + RN version for test-app init (CI-only)
+        working-directory: apps/example
+        shell: bash
+        env:
+          YARN_ENABLE_IMMUTABLE_INSTALLS: 'false'
+        run: |
+          yarn add --dev react-native@^0.81.0 react-native-windows@^0.81.0
+
       # react-native-test-app generates the windows/ host (sln, vcxproj,
-      # autolinking glue). The example app's react-native.config.js
-      # already declares solutionFile: 'windows/example.sln' so RNW CLI
-      # picks it up.
-      # react-native-test-app's package.json declares its binaries as
-      # `init-test-app` / `configure-test-app` (not `react-native-test-app`),
-      # so npx needs the explicit binary name. The package is already a
-      # devDependency of apps/example via the workspace root, so npx will
-      # resolve it from node_modules without a fresh install.
+      # autolinking glue). Pinning --version 0.81 makes init-test-app
+      # fetch the 0.81 template that matches the RNW we just installed,
+      # regardless of any other RN version it might detect.
       - name: Initialize Windows test-app host
         working-directory: apps/example
         shell: bash
@@ -240,7 +252,8 @@ jobs:
           npx --yes init-test-app \
             --platform windows \
             --destination . \
-            --name example
+            --name example \
+            --version 0.81
 
       - name: Build Windows test app (with retries)
         uses: nick-fields/retry@7152eba30c6575329ac0576536151aca5a72780e # v3.0.0
