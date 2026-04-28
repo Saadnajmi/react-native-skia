@@ -228,11 +228,16 @@ jobs:
       # autolinking glue). The example app's react-native.config.js
       # already declares solutionFile: 'windows/example.sln' so RNW CLI
       # picks it up.
+      # react-native-test-app's package.json declares its binaries as
+      # `init-test-app` / `configure-test-app` (not `react-native-test-app`),
+      # so npx needs the explicit binary name. The package is already a
+      # devDependency of apps/example via the workspace root, so npx will
+      # resolve it from node_modules without a fresh install.
       - name: Initialize Windows test-app host
         working-directory: apps/example
         shell: bash
         run: |
-          npx --yes react-native-test-app init \
+          npx --yes init-test-app \
             --platform windows \
             --destination . \
             --force \
