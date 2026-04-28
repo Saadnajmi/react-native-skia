@@ -240,7 +240,6 @@ jobs:
           npx --yes init-test-app \
             --platform windows \
             --destination . \
-            --force \
             --name example
 
       - name: Build Windows test app (with retries)
