@@ -8,10 +8,21 @@ export const GRAPHITE = !!process.env.SK_GRAPHITE;
 export const MACCATALYST = false;
 const BUILD_WITH_PARAGRAPH = true;
 
-export const SkiaSrc = path.join(__dirname, "../../../externals/skia");
-export const ProjectRoot = path.join(__dirname, "../../..");
-export const PackageRoot = path.join(__dirname, "..");
-export const OutFolder = path.join(SkiaSrc, DEBUG ? "debug" : "out");
+// gn (and the bash command lines runAsync constructs) treat backslashes as
+// escape characters, not path separators, so absolute Windows paths like
+// `D:\a\...\out` get re-interpreted as relative and silently prepended with
+// the CWD. Normalize every path constant to forward slashes — Skia's GN,
+// ninja, and Node's path APIs all accept them on Windows.
+const toPosixPath = (p: string) => p.replace(/\\/g, "/");
+
+export const SkiaSrc = toPosixPath(
+  path.join(__dirname, "../../../externals/skia")
+);
+export const ProjectRoot = toPosixPath(path.join(__dirname, "../../.."));
+export const PackageRoot = toPosixPath(path.join(__dirname, ".."));
+export const OutFolder = toPosixPath(
+  path.join(SkiaSrc, DEBUG ? "debug" : "out")
+);
 
 const NdkDir = process.env.ANDROID_NDK ?? "";
 
