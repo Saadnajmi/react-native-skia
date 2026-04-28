@@ -250,11 +250,13 @@ jobs:
           yarn add react-native@^0.81.0 react-native-windows@^0.81.0
           yarn add --dev react-native-test-app@^5.1.0
 
-      # react-native-test-app generates the windows/ host (sln, vcxproj,
-      # autolinking glue). Pinning --version 0.81 makes init-test-app
-      # fetch the 0.81 template that matches the RNW we just installed,
-      # regardless of any other RN version it might detect.
-      - name: Initialize Windows test-app host
+      # init-test-app sets up the test-app project (downloads the
+      # template-0.81.x.tgz, configures react-native.config.js, etc.)
+      # but does NOT actually generate the windows/ host files. Per
+      # the test-app docs the Windows scaffolding is a separate
+      # `npx install-windows-test-app` step that materializes
+      # apps/example/windows/example.sln + project files.
+      - name: Initialize test-app project
         working-directory: apps/example
         shell: bash
         run: |
@@ -263,6 +265,12 @@ jobs:
             --destination . \
             --name example \
             --version 0.81
+
+      - name: Install Windows test-app host (sln + vcxproj scaffolding)
+        working-directory: apps/example
+        shell: bash
+        run: |
+          npx --yes install-windows-test-app
 
       - name: Build Windows test app (with retries)
         uses: nick-fields/retry@7152eba30c6575329ac0576536151aca5a72780e # v3.0.0
