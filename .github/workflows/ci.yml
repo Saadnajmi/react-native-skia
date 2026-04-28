@@ -233,13 +233,22 @@ jobs:
       # back). YARN_ENABLE_IMMUTABLE_INSTALLS=false relaxes the
       # `--immutable` policy the Setup composite enforced for the rest
       # of the workspace.
-      - name: Override RNW + RN version for test-app init (CI-only)
+      # The example app pins:
+      #   - react-native@0.83.1 (no matching RNW exists yet)
+      #   - react-native-windows@^0.75.0 (too old for our peer dep)
+      #   - react-native-test-app@4.4.7 (only supports RNW 0.70-0.79)
+      # Bump all three to a CI-only set that lines up: RNW 0.81.x +
+      # RN 0.81.x + test-app 5.1.x (which accepts RNW 0.76-0.82).
+      # YARN_ENABLE_IMMUTABLE_INSTALLS=false relaxes the immutable
+      # policy the Setup composite enforced.
+      - name: Override RN + RNW + test-app versions for init (CI-only)
         working-directory: apps/example
         shell: bash
         env:
           YARN_ENABLE_IMMUTABLE_INSTALLS: 'false'
         run: |
           yarn add react-native@^0.81.0 react-native-windows@^0.81.0
+          yarn add --dev react-native-test-app@^5.1.0
 
       # react-native-test-app generates the windows/ host (sln, vcxproj,
       # autolinking glue). Pinning --version 0.81 makes init-test-app
