@@ -75,7 +75,13 @@ const configurePlatform = async (
       target.options?.reduce((a, cur) => (a += `--${cur[0]}=${cur[1]} `), "") ||
       "";
 
-    const command = `${commandline} ${options} ${targetOptions} --script-executable=python3 --args='target_os="${target.platform}" target_cpu="${target.cpu}" ${common}${args}${targetArgs}'`;
+    // Windows runners ship `python.exe` (no `python3` alias). gn embeds the
+    // value of --script-executable into the generated build.ninja `python_path`
+    // variable, so when ninja later spawns `cmd.exe /c python_path ...` for
+    // Skia's Python build helpers (e.g. gn/cp.py for icudtl.dat), an
+    // executable that doesn't exist on PATH causes a hard failure mid-build.
+    const scriptExecutable = platformName === "windows" ? "python" : "python3";
+    const command = `${commandline} ${options} ${targetOptions} --script-executable=${scriptExecutable} --args='target_os="${target.platform}" target_cpu="${target.cpu}" ${common}${args}${targetArgs}'`;
     await runAsync(command, "⚙️");
     return true;
   } else {
