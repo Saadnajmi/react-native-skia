@@ -95,10 +95,20 @@ export const buildPlatform = async (
   // We need to include the path to our custom python2 -> python3 mapping script
   // to make sure we can run all scripts that uses #!/usr/bin/env python as shebang
   // https://groups.google.com/g/skia-discuss/c/BYyB-TwA8ow
+  //
+  // On Windows we restrict ninja to just the libs we ship. The default `ninja
+  // all` target rebuilds every BUILD.gn rule including orphan third-parties
+  // (dng_sdk, etc.) whose Windows compatibility is broken in current Skia
+  // even when their consumers are disabled via skia_use_*=false. macOS/Linux
+  // keep the existing default-target behavior.
+  const ninjaTargets =
+    platform === "windows"
+      ? ` ${configurations[platform].outputNames.join(" ")}`
+      : "";
   const command = `PATH=${process.cwd()}/../bin:$PATH ninja -C ${getOutDir(
     platform,
     targetName
-  )}`;
+  )}${ninjaTargets}`;
   const platformEmoji: Record<string, string> = {
     android: "🤖",
     windows: "🪟",
