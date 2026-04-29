@@ -388,15 +388,32 @@ jobs:
           }
           Start-Sleep -Seconds 15
 
-          # 5) Launch the Win32 binary directly. The AppX-wrapped
-          # variant aborts because the runner is missing the
-          # Microsoft.WindowsAppRuntime.1.7 framework.
+          # 5) Suppress JIT debugger / CRT abort dialogs so the app
+          # either runs cleanly or actually faults (and WER fires).
+          reg add "HKLM\Software\Microsoft\Windows\Windows Error Reporting" /v DontShowUI /t REG_DWORD /d 1 /f | Out-Host
+          reg add "HKCU\Software\Microsoft\Windows\Windows Error Reporting" /v DontShowUI /t REG_DWORD /d 1 /f | Out-Host
+          # Force-create a LocalDumps target so .dmp files land in a
+          # known location for upload as artifact.
+          $dumpDir = "$env:GITHUB_WORKSPACE\reactapp-dumps"
+          New-Item -ItemType Directory -Force -Path $dumpDir | Out-Null
+          reg add "HKLM\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps" /v DumpFolder /t REG_EXPAND_SZ /d "$dumpDir" /f | Out-Host
+          reg add "HKLM\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps" /v DumpType /t REG_DWORD /d 2 /f | Out-Host
+          reg add "HKLM\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps" /v DumpCount /t REG_DWORD /d 5 /f | Out-Host
+
+          # 6) Launch the Win32 binary directly with stdout/stderr
+          # captured so we can see anything React Native prints
+          # before it aborts.
           $exe = Get-ChildItem -Path "apps/example/windows/x64/Debug" `
             -Filter "ReactApp.exe" -ErrorAction SilentlyContinue `
             | Select-Object -First 1
+          $logDir = "$env:GITHUB_WORKSPACE\reactapp-logs"
+          New-Item -ItemType Directory -Force -Path $logDir | Out-Null
           if ($exe) {
             Write-Host "Launching Win32 directly: $($exe.FullName)"
-            Start-Process -FilePath $exe.FullName -WorkingDirectory (Split-Path $exe.FullName)
+            Start-Process -FilePath $exe.FullName `
+              -WorkingDirectory (Split-Path $exe.FullName) `
+              -RedirectStandardOutput "$logDir\stdout.log" `
+              -RedirectStandardError "$logDir\stderr.log"
           } elseif ($pkg) {
             $aumid = "$($pkg.PackageFamilyName)!App"
             Write-Host "Launching via shell: $aumid"
@@ -404,6 +421,25 @@ jobs:
           } else {
             Write-Host "No launchable binary found"
           }
+
+          # Auto-dismiss any CRT abort dialog by sending Alt+I
+          # (Ignore) to it. Runs in a background job so screenshots
+          # can still be captured if the dialog stays.
+          Start-Job -Name dismiss -ScriptBlock {
+            Add-Type -AssemblyName System.Windows.Forms
+            for ($i = 0; $i -lt 20; $i++) {
+              Start-Sleep -Seconds 2
+              $procs = Get-Process | Where-Object {
+                $_.MainWindowTitle -match "Runtime Library|Debug Error|Application Error"
+              }
+              foreach ($p in $procs) {
+                Write-Host "Dismissing dialog: $($p.MainWindowTitle) (PID $($p.Id))"
+                try {
+                  [System.Windows.Forms.SendKeys]::SendWait("%i")
+                } catch { }
+              }
+            }
+          } | Out-Null
 
       # After screenshots, dump anything Windows recorded about the
       # ReactApp.exe crash (event log + WER reports) so the next
@@ -473,6 +509,8 @@ jobs:
             apps/example/windows/**/*.binlog
             apps/example/windows/**/*.log
             apps/example/windows/AppPackages/**
+            reactapp-logs/**
+            reactapp-dumps/**
           if-no-files-found: warn
           retention-days: 7
 
