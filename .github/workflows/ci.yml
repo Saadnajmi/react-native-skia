@@ -390,9 +390,7 @@ jobs:
 
           # 5) Launch the Win32 binary directly. The AppX-wrapped
           # variant aborts because the runner is missing the
-          # Microsoft.WindowsAppRuntime.1.7 framework the test-app
-          # template targets (only 1.8 is installed). Win32 doesn't
-          # need the AppX framework so we can sidestep that.
+          # Microsoft.WindowsAppRuntime.1.7 framework.
           $exe = Get-ChildItem -Path "apps/example/windows/x64/Debug" `
             -Filter "ReactApp.exe" -ErrorAction SilentlyContinue `
             | Select-Object -First 1
@@ -405,6 +403,48 @@ jobs:
             Start-Process "explorer.exe" "shell:appsFolder\$aumid"
           } else {
             Write-Host "No launchable binary found"
+          }
+
+      # After screenshots, dump anything Windows recorded about the
+      # ReactApp.exe crash (event log + WER reports) so the next
+      # iteration knows what's actually failing rather than just
+      # 'abort()'.
+      - name: Dump ReactApp crash diagnostics
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Write-Host "===== Application event log (last hour, ReactApp/abort) ====="
+          try {
+            Get-WinEvent -FilterHashtable @{
+              LogName='Application';
+              StartTime=(Get-Date).AddHours(-1);
+              ProviderName='Application Error','Windows Error Reporting','.NET Runtime'
+            } -ErrorAction SilentlyContinue `
+              | Where-Object { $_.Message -match "ReactApp" } `
+              | Select-Object -First 10 TimeCreated,Id,LevelDisplayName,Message `
+              | Format-List
+          } catch { Write-Host "Event log query failed: $_" }
+
+          Write-Host "===== WER report archives (last hour) ====="
+          $werDirs = @(
+            "$env:LOCALAPPDATA\Microsoft\Windows\WER\ReportArchive",
+            "$env:LOCALAPPDATA\Microsoft\Windows\WER\ReportQueue",
+            "$env:ProgramData\Microsoft\Windows\WER\ReportArchive",
+            "$env:ProgramData\Microsoft\Windows\WER\ReportQueue"
+          )
+          foreach ($d in $werDirs) {
+            if (Test-Path $d) {
+              Get-ChildItem -Path $d -Directory -ErrorAction SilentlyContinue `
+                | Where-Object { $_.LastWriteTime -gt (Get-Date).AddHours(-1) } `
+                | ForEach-Object {
+                  Write-Host "--- $($_.FullName) ---"
+                  Get-ChildItem -Path $_.FullName -ErrorAction SilentlyContinue `
+                    | Format-Table Name,Length -AutoSize
+                  $reportTxt = Join-Path $_.FullName "Report.wer"
+                  if (Test-Path $reportTxt) { Get-Content $reportTxt | Select-Object -First 60 | Out-Host }
+                }
+            }
           }
 
           # 5) Capture multi-frame screenshots.
