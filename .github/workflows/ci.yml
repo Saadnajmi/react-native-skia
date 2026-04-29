@@ -327,9 +327,11 @@ jobs:
               --logging \
               --msbuildprops "AppxPackageSigningEnabled=false;WindowsTargetPlatformVersion=10.0.26100.0;TargetPlatformVersion=10.0.26100.0"
 
-      # The build step ran run-windows with --no-launch (but lets it
-      # deploy). So the AppX should already be registered with the
-      # OS by the time this step runs.
+      # The build step's `--no-launch` only creates the AppX layout
+      # in the deployment folder; it doesn't actually register the
+      # package with the OS. Run an extra `run-windows --no-build
+      # --no-autolink --no-launch` first to force registration via
+      # MSBuild's Deploy target plus its install logic.
       - name: Run app and capture screenshot
         if: success()
         continue-on-error: true
@@ -337,27 +339,29 @@ jobs:
         run: |
           $ErrorActionPreference = 'Continue'
 
-          # 1) Resolve the deployed AppX package. ReactTestApp ships
-          # the test-app's UWP package via run-windows' deploy.
+          # 1) Force-register the AppX (run-windows handles framework
+          # deps like Microsoft.WindowsAppRuntime.1.7 properly).
+          Push-Location apps/example
+          Write-Host "===== run-windows --no-launch to register AppX ====="
+          npx react-native run-windows `
+            --arch x64 `
+            --no-build `
+            --no-autolink `
+            --no-launch `
+            --logging
+          Pop-Location
+
+          # 2) Resolve the registered AppX package.
           $pkg = Get-AppxPackage -Name "*ReactTestApp*" `
             | Sort-Object -Property InstallLocation -Descending `
             | Select-Object -First 1
+
           if (-not $pkg) {
-            Write-Host "AppX not registered yet — listing what we have:"
-            Get-AppxPackage | Where-Object { $_.Name -match "React|Test" } | Format-Table -AutoSize
-            # Fall back to manually registering from the build output.
-            $manifest = Get-ChildItem -Path "apps/example/windows" `
-              -Recurse -Filter "AppxManifest.xml" -ErrorAction SilentlyContinue `
-              | Where-Object { $_.FullName -match "x64\\Debug\\AppX\\AppxManifest\.xml$" } `
-              | Select-Object -First 1
-            if ($manifest) {
-              Write-Host "Manually registering: $($manifest.FullName)"
-              try { Add-AppxPackage -Register $manifest.FullName -ForceApplicationShutdown } catch { Write-Host "Register failed: $_" }
-              $pkg = Get-AppxPackage -Name "*ReactTestApp*" | Select-Object -First 1
-            }
+            Write-Host "ReactTestApp still not registered. AppX packages currently visible:"
+            Get-AppxPackage | Format-Table Name,Version,PackageFamilyName -AutoSize
           }
 
-          # 2) Loopback exemption MUST happen between deploy and
+          # 3) Loopback exemption MUST happen between deploy and
           # launch — UWP/AppX apps cannot reach localhost otherwise
           # and React Native aborts fetching the JS bundle.
           if ($pkg) {
@@ -368,21 +372,28 @@ jobs:
             Write-Host "(No installed ReactTestApp AppX found — loopback skipped)"
           }
 
-          # 3) Start metro in the background. Use npx so we don't
-          # depend on a specific cli.js path.
+          # 4) Start metro in the background.
           $metro = Start-Job -ScriptBlock {
             Set-Location $using:PWD\apps\example
             npx react-native start --port 8081
           }
           Start-Sleep -Seconds 15
 
-          # 4) Launch via the shell:appsFolder protocol.
+          # 5) Launch via the shell:appsFolder protocol.
           if ($pkg) {
             $aumid = "$($pkg.PackageFamilyName)!App"
             Write-Host "Launching $aumid"
             Start-Process "explorer.exe" "shell:appsFolder\$aumid"
           } else {
-            Write-Host "Cannot launch — no AppX registered"
+            # As a last resort, let run-windows deploy + launch in one go.
+            Write-Host "Falling back to run-windows for launch"
+            Push-Location apps/example
+            try {
+              npx react-native run-windows --arch x64 --logging --no-build --no-autolink
+            } catch {
+              Write-Host "Fallback launch failed: $_"
+            }
+            Pop-Location
           }
 
           # 5) Capture multi-frame screenshots.
