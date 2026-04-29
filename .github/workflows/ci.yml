@@ -333,6 +333,23 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
+
+          # UWP/AppX apps run sandboxed and cannot reach the host's
+          # localhost without an explicit loopback exemption. Without
+          # this the test app aborts trying to fetch the JS bundle from
+          # Metro at http://localhost:8081 — the previous CI run's
+          # screenshot showed a "Debug Error! abort() has been called"
+          # dialog from ReactApp.exe that this fixes.
+          $pfn = (Get-AppxPackage -Name "*ReactTestApp*" `
+                  | Sort-Object -Property InstallLocation -Descending `
+                  | Select-Object -First 1).PackageFamilyName
+          if ($pfn) {
+            Write-Host "Adding loopback exemption for: $pfn"
+            CheckNetIsolation LoopbackExempt -a -n="$pfn" | Out-Host
+          } else {
+            Write-Host "(No installed ReactTestApp AppX found — skipping loopback exempt)"
+          }
+
           # Start metro in the background so the JS bundle loads when the
           # test-app launches.
           Start-Process -NoNewWindow -FilePath "node" `
@@ -349,17 +366,25 @@ jobs:
             Write-Host "Launch failed: $_"
           }
           Pop-Location
-          Start-Sleep -Seconds 30
 
+          # Capture multiple screenshots over time so we have evidence
+          # of the app at different points (dialog vs. real UI) — the
+          # PNGs upload as artifacts for visual diff.
           Add-Type -AssemblyName System.Windows.Forms
           Add-Type -AssemblyName System.Drawing
-          $bounds  = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-          $bitmap  = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
-          $graphic = [System.Drawing.Graphics]::FromImage($bitmap)
-          $graphic.CopyFromScreen($bounds.X, $bounds.Y, 0, 0, $bounds.Size)
           New-Item -ItemType Directory -Force -Path screenshots | Out-Null
-          $bitmap.Save("screenshots/test-app-windows-x64.png")
-          Write-Host "Screenshot saved."
+          $bounds  = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          foreach ($i in 0..5) {
+            Start-Sleep -Seconds 6
+            $bitmap  = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
+            $graphic = [System.Drawing.Graphics]::FromImage($bitmap)
+            $graphic.CopyFromScreen($bounds.X, $bounds.Y, 0, 0, $bounds.Size)
+            $name = "screenshots/test-app-windows-x64-{0:D2}.png" -f $i
+            $bitmap.Save($name)
+            $bitmap.Dispose()
+            $graphic.Dispose()
+            Write-Host "Saved $name"
+          }
 
       - name: Upload Windows test app build artifacts
         if: always()
