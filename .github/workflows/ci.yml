@@ -282,12 +282,17 @@ jobs:
       #       literal "10.0.22621.0" and rewrite to 10.0.26100.0 in
       #       case it's pinned somewhere Directory.Build.props can't
       #       override (e.g. a .csproj imported from a NuGet package).
-      - name: Retarget generated test-app projects to SDK 10.0.26100.0
+      # Drop a Directory.Build.props at apps/example/ so EVERY C++
+      # project loaded under that tree (apps/example/windows/example.sln
+      # and the generated apps/example/node_modules/.generated/windows
+      # projects it references) inherits WindowsTargetPlatformVersion=
+      # 10.0.26100.0. Earlier attempts placed this only at
+      # apps/example/windows/ which doesn't reach .generated.
+      - name: Pin WindowsTargetPlatformVersion via Directory.Build.props
         shell: pwsh
         run: |
           $sdkVer = "10.0.26100.0"
-          $dirProps = "apps/example/windows/Directory.Build.props"
-          New-Item -ItemType Directory -Force -Path (Split-Path $dirProps) | Out-Null
+          $dirProps = "apps/example/Directory.Build.props"
           $lines = @(
             '<?xml version="1.0" encoding="utf-8"?>',
             '<Project>',
@@ -301,24 +306,6 @@ jobs:
           Set-Content -Path $dirProps -Value ($lines -join [Environment]::NewLine) -NoNewline
           Write-Host "Wrote $dirProps"
 
-          $patterns = @("*.vcxproj","*.vcxitems","*.wapproj","*.csproj","*.props","*.targets","*.sln")
-          $files = Get-ChildItem -Path "apps/example" -Recurse -Force -Include $patterns -ErrorAction SilentlyContinue
-          $patched = 0
-          foreach ($f in $files) {
-            try {
-              $content = Get-Content $f.FullName -Raw -ErrorAction Stop
-              if ($content -match "10\.0\.22621\.0") {
-                $new = $content -replace "10\.0\.22621\.0",$sdkVer
-                Set-Content -Path $f.FullName -Value $new -NoNewline
-                $patched++
-                Write-Host "Retargeted: $($f.FullName)"
-              }
-            } catch {
-              Write-Host "Skipped $($f.FullName): $_"
-            }
-          }
-          Write-Host "Total files retargeted: $patched"
-
       - name: Build Windows test app (with retries)
         uses: nick-fields/retry@7152eba30c6575329ac0576536151aca5a72780e # v3.0.0
         with:
@@ -326,8 +313,9 @@ jobs:
           max_attempts: 3
           retry_on: error
           shell: bash
-          # SDK 10.0.22621 was installed earlier so we can keep the
-          # template's default WindowsTargetPlatformVersion.
+          # Belt + suspenders for the SDK retarget: the upstream
+          # Directory.Build.props pins the version, AND we pass it via
+          # --msbuildprops so command-line msbuild sees it too.
           command: |
             cd apps/example
             npx react-native run-windows \
@@ -335,7 +323,7 @@ jobs:
               --no-launch \
               --no-deploy \
               --logging \
-              --msbuildprops "AppxPackageSigningEnabled=false"
+              --msbuildprops "AppxPackageSigningEnabled=false;WindowsTargetPlatformVersion=10.0.26100.0;TargetPlatformVersion=10.0.26100.0"
 
       # If the build succeeded, try a deploy + launch + screenshot pass.
       # Capture is best-effort: failures here mustn't fail the job.
