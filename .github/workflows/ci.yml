@@ -388,21 +388,23 @@ jobs:
           }
           Start-Sleep -Seconds 15
 
-          # 5) Launch via the shell:appsFolder protocol.
-          if ($pkg) {
+          # 5) Launch the Win32 binary directly. The AppX-wrapped
+          # variant aborts because the runner is missing the
+          # Microsoft.WindowsAppRuntime.1.7 framework the test-app
+          # template targets (only 1.8 is installed). Win32 doesn't
+          # need the AppX framework so we can sidestep that.
+          $exe = Get-ChildItem -Path "apps/example/windows/x64/Debug" `
+            -Filter "ReactApp.exe" -ErrorAction SilentlyContinue `
+            | Select-Object -First 1
+          if ($exe) {
+            Write-Host "Launching Win32 directly: $($exe.FullName)"
+            Start-Process -FilePath $exe.FullName -WorkingDirectory (Split-Path $exe.FullName)
+          } elseif ($pkg) {
             $aumid = "$($pkg.PackageFamilyName)!App"
-            Write-Host "Launching $aumid"
+            Write-Host "Launching via shell: $aumid"
             Start-Process "explorer.exe" "shell:appsFolder\$aumid"
           } else {
-            # As a last resort, let run-windows deploy + launch in one go.
-            Write-Host "Falling back to run-windows for launch"
-            Push-Location apps/example
-            try {
-              npx react-native run-windows --arch x64 --logging --no-build --no-autolink
-            } catch {
-              Write-Host "Fallback launch failed: $_"
-            }
-            Pop-Location
+            Write-Host "No launchable binary found"
           }
 
           # 5) Capture multi-frame screenshots.
