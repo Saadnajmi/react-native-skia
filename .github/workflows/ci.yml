@@ -272,30 +272,58 @@ jobs:
         run: |
           npx --yes install-windows-test-app
 
-      # The generated ReactApp.vcxproj + ReactApp.Package.wapproj
-      # target WindowsTargetPlatformVersion=10.0.22621.0, but the
-      # GitHub windows-latest runner only has SDK 10.0.26100.0
-      # installed (and the runner user can't admin-modify the VS
-      # install). Retarget the generated files to 26100 so MSBuild
-      # finds the SDK on disk.
+      # The runner only has SDK 10.0.26100 but the test-app template
+      # targets 10.0.22621. Two-pronged fix:
+      #   (1) drop a Directory.Build.props at apps/example/windows so
+      #       every C++ project under it (including generated ones in
+      #       node_modules/.generated/windows referenced by the .sln)
+      #       picks up WindowsTargetPlatformVersion=10.0.26100.0;
+      #   (2) sweep every text project file under apps/example for
+      #       literal "10.0.22621.0" and rewrite to 10.0.26100.0 in
+      #       case it's pinned somewhere Directory.Build.props can't
+      #       override (e.g. a .csproj imported from a NuGet package).
       - name: Retarget generated test-app projects to SDK 10.0.26100.0
         shell: pwsh
         run: |
-          $generatedDir = "apps/example/node_modules/.generated/windows"
-          if (-not (Test-Path $generatedDir)) {
-            Write-Error "Generated dir $generatedDir not found"
-            exit 1
-          }
-          $files = Get-ChildItem -Path $generatedDir -Recurse `
-            -Include "*.vcxproj","*.wapproj","*.props","*.targets"
+          $sdkVer = "10.0.26100.0"
+          # 1) Directory.Build.props
+          $dirProps = "apps/example/windows/Directory.Build.props"
+          $propsContent = @'
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <PropertyGroup>
+    <WindowsTargetPlatformVersion>__SDK__</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformMinVersion>10.0.19041.0</WindowsTargetPlatformMinVersion>
+    <TargetPlatformVersion>__SDK__</TargetPlatformVersion>
+  </PropertyGroup>
+</Project>
+'@.Replace("__SDK__",$sdkVer)
+          New-Item -ItemType Directory -Force -Path (Split-Path $dirProps) | Out-Null
+          Set-Content -Path $dirProps -Value $propsContent -NoNewline
+          Write-Host "Wrote $dirProps"
+
+          # 2) Sweep every project / props / targets / sln file for
+          # literal 10.0.22621.0 and rewrite. Limit to apps/example to
+          # avoid touching the broader monorepo.
+          $patterns = @("*.vcxproj","*.vcxitems","*.wapproj","*.csproj",
+                        "*.props","*.targets","*.sln")
+          $files = Get-ChildItem -Path "apps/example" -Recurse -Force `
+            -Include $patterns -ErrorAction SilentlyContinue
+          $patched = 0
           foreach ($f in $files) {
-            $content = Get-Content $f.FullName -Raw
-            if ($content -match "10\.0\.22621\.0") {
-              $patched = $content -replace "10\.0\.22621\.0","10.0.26100.0"
-              Set-Content -Path $f.FullName -Value $patched -NoNewline
-              Write-Host "Retargeted: $($f.FullName)"
+            try {
+              $content = Get-Content $f.FullName -Raw -ErrorAction Stop
+              if ($content -match "10\.0\.22621\.0") {
+                $new = $content -replace "10\.0\.22621\.0",$sdkVer
+                Set-Content -Path $f.FullName -Value $new -NoNewline
+                $patched++
+                Write-Host "Retargeted: $($f.FullName)"
+              }
+            } catch {
+              Write-Host "Skipped $($f.FullName): $_"
             }
           }
+          Write-Host "Total files retargeted: $patched"
 
       - name: Build Windows test app (with retries)
         uses: nick-fields/retry@7152eba30c6575329ac0576536151aca5a72780e # v3.0.0
