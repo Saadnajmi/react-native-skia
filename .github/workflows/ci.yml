@@ -200,25 +200,6 @@ jobs:
       - name: Setup MSVC environment
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
-      # The runner ships Windows SDK 10.0.26100 only, but
-      # react-native-test-app's template-0.81.x targets
-      # WindowsTargetPlatformVersion=10.0.22621.0 in the generated
-      # ReactApp.vcxproj. Override at msbuild props alone wasn't
-      # enough (the wapproj's Windows App SDK manifest references the
-      # 22621 FrameworkIdentity), so install SDK 22621 alongside.
-      - name: Install Windows 10 SDK 22621 (for test-app)
-        shell: pwsh
-        run: |
-          $vsInstaller = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
-          $vsPath = "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise"
-          $proc = Start-Process -FilePath $vsInstaller -ArgumentList @(
-            "modify",
-            "--installPath",$vsPath,
-            "--add","Microsoft.VisualStudio.Component.Windows11SDK.22621",
-            "--quiet","--norestart","--nocache"
-          ) -Wait -PassThru
-          Write-Host "vs_installer modify exited with $($proc.ExitCode)"
-
       - name: Setup Ninja
         uses: seanmiddleditch/gha-setup-ninja@7e868db0f3406270dd46e1dac26c65f621456723 # master
 
@@ -290,6 +271,31 @@ jobs:
         shell: bash
         run: |
           npx --yes install-windows-test-app
+
+      # The generated ReactApp.vcxproj + ReactApp.Package.wapproj
+      # target WindowsTargetPlatformVersion=10.0.22621.0, but the
+      # GitHub windows-latest runner only has SDK 10.0.26100.0
+      # installed (and the runner user can't admin-modify the VS
+      # install). Retarget the generated files to 26100 so MSBuild
+      # finds the SDK on disk.
+      - name: Retarget generated test-app projects to SDK 10.0.26100.0
+        shell: pwsh
+        run: |
+          $generatedDir = "apps/example/node_modules/.generated/windows"
+          if (-not (Test-Path $generatedDir)) {
+            Write-Error "Generated dir $generatedDir not found"
+            exit 1
+          }
+          $files = Get-ChildItem -Path $generatedDir -Recurse `
+            -Include "*.vcxproj","*.wapproj","*.props","*.targets"
+          foreach ($f in $files) {
+            $content = Get-Content $f.FullName -Raw
+            if ($content -match "10\.0\.22621\.0") {
+              $patched = $content -replace "10\.0\.22621\.0","10.0.26100.0"
+              Set-Content -Path $f.FullName -Value $patched -NoNewline
+              Write-Host "Retargeted: $($f.FullName)"
+            }
+          }
 
       - name: Build Windows test app (with retries)
         uses: nick-fields/retry@7152eba30c6575329ac0576536151aca5a72780e # v3.0.0
