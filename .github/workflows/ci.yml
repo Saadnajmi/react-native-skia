@@ -325,8 +325,8 @@ jobs:
               --logging \
               --msbuildprops "AppxPackageSigningEnabled=false;WindowsTargetPlatformVersion=10.0.26100.0;TargetPlatformVersion=10.0.26100.0"
 
-      # If the build succeeded, try a deploy + launch + screenshot pass.
-      # Capture is best-effort: failures here mustn't fail the job.
+      # If the build succeeded, deploy + launch + capture screenshots.
+      # Best-effort — failures here mustn't fail the job.
       - name: Run app and capture screenshot
         if: success()
         continue-on-error: true
@@ -334,48 +334,67 @@ jobs:
         run: |
           $ErrorActionPreference = 'Continue'
 
-          # UWP/AppX apps run sandboxed and cannot reach the host's
-          # localhost without an explicit loopback exemption. Without
-          # this the test app aborts trying to fetch the JS bundle from
-          # Metro at http://localhost:8081 — the previous CI run's
-          # screenshot showed a "Debug Error! abort() has been called"
-          # dialog from ReactApp.exe that this fixes.
-          $pfn = (Get-AppxPackage -Name "*ReactTestApp*" `
-                  | Sort-Object -Property InstallLocation -Descending `
-                  | Select-Object -First 1).PackageFamilyName
-          if ($pfn) {
-            Write-Host "Adding loopback exemption for: $pfn"
-            CheckNetIsolation LoopbackExempt -a -n="$pfn" | Out-Host
+          # 1) Find the AppxManifest.xml the build produced under
+          # node_modules/.generated/windows/...
+          $manifest = Get-ChildItem -Path "apps/example/node_modules/.generated/windows" `
+            -Recurse -Filter "AppxManifest.xml" `
+            -ErrorAction SilentlyContinue `
+            | Where-Object { $_.FullName -match "x64\\Debug\\AppX\\AppxManifest\.xml$" } `
+            | Select-Object -First 1
+          if (-not $manifest) {
+            Write-Host "AppxManifest.xml not found; falling back to run-windows for deploy"
           } else {
-            Write-Host "(No installed ReactTestApp AppX found — skipping loopback exempt)"
+            Write-Host "Registering AppX from $($manifest.FullName)"
+            try {
+              Add-AppxPackage -Register $manifest.FullName -ForceApplicationShutdown
+            } catch {
+              Write-Host "Add-AppxPackage failed: $_"
+            }
           }
 
-          # Start metro in the background so the JS bundle loads when the
-          # test-app launches.
+          # 2) Loopback exemption MUST happen between deploy and launch
+          # — UWP/AppX apps cannot reach localhost otherwise and React
+          # Native aborts fetching the JS bundle from Metro:8081.
+          $pkg = Get-AppxPackage -Name "*ReactTestApp*" `
+            | Sort-Object -Property InstallLocation -Descending `
+            | Select-Object -First 1
+          if ($pkg) {
+            Write-Host "Adding loopback exemption for: $($pkg.PackageFamilyName)"
+            CheckNetIsolation LoopbackExempt -a -n="$($pkg.PackageFamilyName)" | Out-Host
+            CheckNetIsolation LoopbackExempt -s | Out-Host
+          } else {
+            Write-Host "(No installed ReactTestApp AppX found — loopback skipped)"
+          }
+
+          # 3) Start metro in the background.
           Start-Process -NoNewWindow -FilePath "node" `
             -ArgumentList "node_modules/react-native/cli.js","start","--port","8081" `
             -WorkingDirectory "apps/example"
           Start-Sleep -Seconds 15
 
-          # Launch the built app. react-native-test-app installs to a
-          # known package family; use App-X deploy + Start.
-          Push-Location apps/example
-          try {
-            npx react-native run-windows --arch x64 --logging --no-build --no-autolink
-          } catch {
-            Write-Host "Launch failed: $_"
+          # 4) Launch via the shell:appsFolder protocol so we don't
+          # have to re-deploy via run-windows.
+          if ($pkg) {
+            $aumid = "$($pkg.PackageFamilyName)!App"
+            Write-Host "Launching $aumid"
+            Start-Process "explorer.exe" "shell:appsFolder\$aumid"
+          } else {
+            Push-Location apps/example
+            try {
+              npx react-native run-windows --arch x64 --logging --no-build --no-autolink
+            } catch {
+              Write-Host "Launch failed: $_"
+            }
+            Pop-Location
           }
-          Pop-Location
 
-          # Capture multiple screenshots over time so we have evidence
-          # of the app at different points (dialog vs. real UI) — the
-          # PNGs upload as artifacts for visual diff.
+          # 5) Capture multi-frame screenshots.
           Add-Type -AssemblyName System.Windows.Forms
           Add-Type -AssemblyName System.Drawing
           New-Item -ItemType Directory -Force -Path screenshots | Out-Null
           $bounds  = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-          foreach ($i in 0..5) {
-            Start-Sleep -Seconds 6
+          foreach ($i in 0..7) {
+            Start-Sleep -Seconds 5
             $bitmap  = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
             $graphic = [System.Drawing.Graphics]::FromImage($bitmap)
             $graphic.CopyFromScreen($bounds.X, $bounds.Y, 0, 0, $bounds.Size)
