@@ -319,10 +319,15 @@ jobs:
           # Note: --no-launch only (no --no-deploy) so the AppX gets
           # registered on the runner; the screenshot step needs an
           # installed package to apply the loopback exemption to.
+          # --release: Debug CRT pops a 'Debug Error! abort()' dialog
+          # that blocks the process from actually faulting (no WER
+          # dump, no diagnosable crash). Release CRT terminates on
+          # abort silently → WER fires → we get a minidump.
           command: |
             cd apps/example
             npx react-native run-windows \
               --arch x64 \
+              --release \
               --no-launch \
               --logging \
               --msbuildprops "AppxPackageSigningEnabled=false;WindowsTargetPlatformVersion=10.0.26100.0;TargetPlatformVersion=10.0.26100.0"
@@ -345,6 +350,7 @@ jobs:
           Write-Host "===== run-windows --no-launch to register AppX ====="
           npx react-native run-windows `
             --arch x64 `
+            --release `
             --no-build `
             --no-autolink `
             --no-launch `
@@ -403,7 +409,7 @@ jobs:
           # 6) Launch the Win32 binary directly with stdout/stderr
           # captured so we can see anything React Native prints
           # before it aborts.
-          $exe = Get-ChildItem -Path "apps/example/windows/x64/Debug" `
+          $exe = Get-ChildItem -Path "apps/example/windows/x64/Release" `
             -Filter "ReactApp.exe" -ErrorAction SilentlyContinue `
             | Select-Object -First 1
           $logDir = "$env:GITHUB_WORKSPACE\reactapp-logs"
