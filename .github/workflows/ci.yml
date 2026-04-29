@@ -286,29 +286,23 @@ jobs:
         shell: pwsh
         run: |
           $sdkVer = "10.0.26100.0"
-          # 1) Directory.Build.props
           $dirProps = "apps/example/windows/Directory.Build.props"
-          $propsContent = @'
-<?xml version="1.0" encoding="utf-8"?>
-<Project>
-  <PropertyGroup>
-    <WindowsTargetPlatformVersion>__SDK__</WindowsTargetPlatformVersion>
-    <WindowsTargetPlatformMinVersion>10.0.19041.0</WindowsTargetPlatformMinVersion>
-    <TargetPlatformVersion>__SDK__</TargetPlatformVersion>
-  </PropertyGroup>
-</Project>
-'@.Replace("__SDK__",$sdkVer)
           New-Item -ItemType Directory -Force -Path (Split-Path $dirProps) | Out-Null
-          Set-Content -Path $dirProps -Value $propsContent -NoNewline
+          $lines = @(
+            '<?xml version="1.0" encoding="utf-8"?>',
+            '<Project>',
+            '  <PropertyGroup>',
+            "    <WindowsTargetPlatformVersion>$sdkVer</WindowsTargetPlatformVersion>",
+            '    <WindowsTargetPlatformMinVersion>10.0.19041.0</WindowsTargetPlatformMinVersion>',
+            "    <TargetPlatformVersion>$sdkVer</TargetPlatformVersion>",
+            '  </PropertyGroup>',
+            '</Project>'
+          )
+          Set-Content -Path $dirProps -Value ($lines -join [Environment]::NewLine) -NoNewline
           Write-Host "Wrote $dirProps"
 
-          # 2) Sweep every project / props / targets / sln file for
-          # literal 10.0.22621.0 and rewrite. Limit to apps/example to
-          # avoid touching the broader monorepo.
-          $patterns = @("*.vcxproj","*.vcxitems","*.wapproj","*.csproj",
-                        "*.props","*.targets","*.sln")
-          $files = Get-ChildItem -Path "apps/example" -Recurse -Force `
-            -Include $patterns -ErrorAction SilentlyContinue
+          $patterns = @("*.vcxproj","*.vcxitems","*.wapproj","*.csproj","*.props","*.targets","*.sln")
+          $files = Get-ChildItem -Path "apps/example" -Recurse -Force -Include $patterns -ErrorAction SilentlyContinue
           $patched = 0
           foreach ($f in $files) {
             try {
