@@ -351,14 +351,23 @@ jobs:
             --logging
           Pop-Location
 
-          # 2) Resolve the registered AppX package.
-          $pkg = Get-AppxPackage -Name "*ReactTestApp*" `
-            | Sort-Object -Property InstallLocation -Descending `
+          # 2) Resolve the registered AppX package. The test-app's
+          # PackageName is a GUID (not "ReactTestApp"), so match by
+          # InstallLocation pointing into our build's Debug\AppX\.
+          $expectedRoot = (Resolve-Path "apps/example/windows").Path
+          $pkg = Get-AppxPackage `
+            | Where-Object { $_.InstallLocation -and $_.InstallLocation.StartsWith($expectedRoot) } `
+            | Sort-Object -Property InstallDate -Descending `
             | Select-Object -First 1
 
           if (-not $pkg) {
-            Write-Host "ReactTestApp still not registered. AppX packages currently visible:"
-            Get-AppxPackage | Format-Table Name,Version,PackageFamilyName -AutoSize
+            Write-Host "Test-app AppX not found by InstallLocation. Recent packages:"
+            Get-AppxPackage `
+              | Sort-Object -Property InstallDate -Descending `
+              | Select-Object -First 10 `
+              | Format-Table Name,PackageFamilyName,InstallLocation -AutoSize
+          } else {
+            Write-Host "Found test-app: $($pkg.PackageFamilyName) at $($pkg.InstallLocation)"
           }
 
           # 3) Loopback exemption MUST happen between deploy and
