@@ -313,20 +313,23 @@ jobs:
           max_attempts: 3
           retry_on: error
           shell: bash
-          # Belt + suspenders for the SDK retarget: the upstream
-          # Directory.Build.props pins the version, AND we pass it via
-          # --msbuildprops so command-line msbuild sees it too.
+          # Belt + suspenders for the SDK retarget: Directory.Build.props
+          # pins the version, AND we pass it via --msbuildprops so
+          # command-line msbuild sees it too.
+          # Note: --no-launch only (no --no-deploy) so the AppX gets
+          # registered on the runner; the screenshot step needs an
+          # installed package to apply the loopback exemption to.
           command: |
             cd apps/example
             npx react-native run-windows \
               --arch x64 \
               --no-launch \
-              --no-deploy \
               --logging \
               --msbuildprops "AppxPackageSigningEnabled=false;WindowsTargetPlatformVersion=10.0.26100.0;TargetPlatformVersion=10.0.26100.0"
 
-      # If the build succeeded, deploy + launch + capture screenshots.
-      # Best-effort — failures here mustn't fail the job.
+      # The build step ran run-windows with --no-launch (but lets it
+      # deploy). So the AppX should already be registered with the
+      # OS by the time this step runs.
       - name: Run app and capture screenshot
         if: success()
         continue-on-error: true
@@ -334,30 +337,29 @@ jobs:
         run: |
           $ErrorActionPreference = 'Continue'
 
-          # 1) Find the AppxManifest.xml the build produced under
-          # node_modules/.generated/windows/...
-          $manifest = Get-ChildItem -Path "apps/example/node_modules/.generated/windows" `
-            -Recurse -Filter "AppxManifest.xml" `
-            -ErrorAction SilentlyContinue `
-            | Where-Object { $_.FullName -match "x64\\Debug\\AppX\\AppxManifest\.xml$" } `
-            | Select-Object -First 1
-          if (-not $manifest) {
-            Write-Host "AppxManifest.xml not found; falling back to run-windows for deploy"
-          } else {
-            Write-Host "Registering AppX from $($manifest.FullName)"
-            try {
-              Add-AppxPackage -Register $manifest.FullName -ForceApplicationShutdown
-            } catch {
-              Write-Host "Add-AppxPackage failed: $_"
-            }
-          }
-
-          # 2) Loopback exemption MUST happen between deploy and launch
-          # — UWP/AppX apps cannot reach localhost otherwise and React
-          # Native aborts fetching the JS bundle from Metro:8081.
+          # 1) Resolve the deployed AppX package. ReactTestApp ships
+          # the test-app's UWP package via run-windows' deploy.
           $pkg = Get-AppxPackage -Name "*ReactTestApp*" `
             | Sort-Object -Property InstallLocation -Descending `
             | Select-Object -First 1
+          if (-not $pkg) {
+            Write-Host "AppX not registered yet — listing what we have:"
+            Get-AppxPackage | Where-Object { $_.Name -match "React|Test" } | Format-Table -AutoSize
+            # Fall back to manually registering from the build output.
+            $manifest = Get-ChildItem -Path "apps/example/windows" `
+              -Recurse -Filter "AppxManifest.xml" -ErrorAction SilentlyContinue `
+              | Where-Object { $_.FullName -match "x64\\Debug\\AppX\\AppxManifest\.xml$" } `
+              | Select-Object -First 1
+            if ($manifest) {
+              Write-Host "Manually registering: $($manifest.FullName)"
+              try { Add-AppxPackage -Register $manifest.FullName -ForceApplicationShutdown } catch { Write-Host "Register failed: $_" }
+              $pkg = Get-AppxPackage -Name "*ReactTestApp*" | Select-Object -First 1
+            }
+          }
+
+          # 2) Loopback exemption MUST happen between deploy and
+          # launch — UWP/AppX apps cannot reach localhost otherwise
+          # and React Native aborts fetching the JS bundle.
           if ($pkg) {
             Write-Host "Adding loopback exemption for: $($pkg.PackageFamilyName)"
             CheckNetIsolation LoopbackExempt -a -n="$($pkg.PackageFamilyName)" | Out-Host
@@ -366,26 +368,21 @@ jobs:
             Write-Host "(No installed ReactTestApp AppX found — loopback skipped)"
           }
 
-          # 3) Start metro in the background.
-          Start-Process -NoNewWindow -FilePath "node" `
-            -ArgumentList "node_modules/react-native/cli.js","start","--port","8081" `
-            -WorkingDirectory "apps/example"
+          # 3) Start metro in the background. Use npx so we don't
+          # depend on a specific cli.js path.
+          $metro = Start-Job -ScriptBlock {
+            Set-Location $using:PWD\apps\example
+            npx react-native start --port 8081
+          }
           Start-Sleep -Seconds 15
 
-          # 4) Launch via the shell:appsFolder protocol so we don't
-          # have to re-deploy via run-windows.
+          # 4) Launch via the shell:appsFolder protocol.
           if ($pkg) {
             $aumid = "$($pkg.PackageFamilyName)!App"
             Write-Host "Launching $aumid"
             Start-Process "explorer.exe" "shell:appsFolder\$aumid"
           } else {
-            Push-Location apps/example
-            try {
-              npx react-native run-windows --arch x64 --logging --no-build --no-autolink
-            } catch {
-              Write-Host "Launch failed: $_"
-            }
-            Pop-Location
+            Write-Host "Cannot launch — no AppX registered"
           }
 
           # 5) Capture multi-frame screenshots.
