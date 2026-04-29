@@ -288,34 +288,6 @@ jobs:
       # projects it references) inherits WindowsTargetPlatformVersion=
       # 10.0.26100.0. Earlier attempts placed this only at
       # apps/example/windows/ which doesn't reach .generated.
-      # The test-app template-0.81.x's AppxManifest.xml declares a
-      # PackageDependency on Microsoft.WindowsAppRuntime.1.7, but the
-      # GitHub windows-latest runner only ships 1.8 (see deploy log
-      # 'Microsoft.WindowsAppRuntime.1.7/X64 is not currently installed').
-      # Without the framework the app fails to initialize before a
-      # window is shown — no dump, no stderr, no visible UI.
-      # Rewrite every reference to Microsoft.WindowsAppRuntime.1.7 →
-      # Microsoft.WindowsAppRuntime.1.8 in generated test-app files.
-      - name: Retarget WindowsAppRuntime 1.7 → 1.8 in test-app manifest
-        shell: pwsh
-        run: |
-          $files = Get-ChildItem -Path "apps/example" -Recurse -Force `
-            -Include "AppxManifest.xml","*.wapproj","*.vcxproj","*.props","*.targets","*.csproj","packages.config" `
-            -ErrorAction SilentlyContinue
-          $patched = 0
-          foreach ($f in $files) {
-            try {
-              $content = Get-Content $f.FullName -Raw -ErrorAction Stop
-              if ($content -match "WindowsAppRuntime\.1\.7|WindowsAppRuntime/1\.7|Microsoft\.WindowsAppRuntime.*1\.7") {
-                $new = $content -replace "WindowsAppRuntime\.1\.7","WindowsAppRuntime.1.8"
-                Set-Content -Path $f.FullName -Value $new -NoNewline
-                $patched++
-                Write-Host "Retargeted: $($f.FullName)"
-              }
-            } catch { }
-          }
-          Write-Host "WindowsAppRuntime files retargeted: $patched"
-
       - name: Pin WindowsTargetPlatformVersion via Directory.Build.props
         shell: pwsh
         run: |
