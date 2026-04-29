@@ -372,14 +372,16 @@ jobs:
           # depends on 1.7 (deploy log: '1.7/X64 is not currently
           # installed'). Without it ReactApp.exe aborts before
           # creating its window.
-          $rt17 = Get-ChildItem -Path "$env:USERPROFILE\.nuget\packages\microsoft.windowsappsdk" `
-            -Recurse -Filter "Microsoft.WindowsAppRuntime.1.7-x64.msix" `
-            -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $rt17) {
-            $rt17 = Get-ChildItem -Path "$env:USERPROFILE\.nuget\packages" `
-              -Recurse -Filter "Microsoft.WindowsAppRuntime.1.7*.msix" `
-              -ErrorAction SilentlyContinue | Select-Object -First 1
-          }
+          # The Microsoft.WindowsAppSDK NuGet ships the MSIX under
+          # tools\MSIX\<arch>\, where arch is one of win10-arm64,
+          # win10-x86, win10-x64. Filter explicitly for the x64
+          # variant so we don't accidentally install ARM64 on an x64
+          # runner.
+          $rt17 = Get-ChildItem -Path "$env:USERPROFILE\.nuget\packages" `
+            -Recurse -Filter "Microsoft.WindowsAppRuntime.1.7*.msix" `
+            -ErrorAction SilentlyContinue `
+            | Where-Object { $_.FullName -match "win10-x64" } `
+            | Select-Object -First 1
           if ($rt17) {
             Write-Host "Installing $($rt17.FullName)"
             try { Add-AppxPackage -Path $rt17.FullName -ForceApplicationShutdown } catch { Write-Host "Install failed: $_" }
