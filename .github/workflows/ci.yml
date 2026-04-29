@@ -463,6 +463,7 @@ jobs:
             }
           } | Out-Null
 
+
       # After screenshots, dump anything Windows recorded about the
       # ReactApp.exe crash (event log + WER reports) so the next
       # iteration knows what's actually failing rather than just
@@ -512,6 +513,24 @@ jobs:
           $bounds  = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
           foreach ($i in 0..7) {
             Start-Sleep -Seconds 5
+            # Process snapshot before each screenshot so we can
+            # correlate window state with the captured image.
+            Write-Host "--- t+$([int]($i*5+5))s ---"
+            $reactProcs = Get-Process -Name "ReactApp" -ErrorAction SilentlyContinue
+            if ($reactProcs) {
+              $reactProcs | Format-Table Name,Id,StartTime,MainWindowTitle,MainWindowHandle -AutoSize `
+                | Out-String | Write-Host
+            } else {
+              Write-Host "(no ReactApp process — exited or never spawned)"
+            }
+            $vis = Get-Process | Where-Object {
+              $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -ne ""
+            } | Select-Object Name,Id,MainWindowTitle
+            if ($vis) {
+              Write-Host "Visible windows:"
+              $vis | Format-Table -AutoSize | Out-String | Write-Host
+            }
+
             $bitmap  = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
             $graphic = [System.Drawing.Graphics]::FromImage($bitmap)
             $graphic.CopyFromScreen($bounds.X, $bounds.Y, 0, 0, $bounds.Size)
