@@ -422,20 +422,33 @@ jobs:
           reg add "HKLM\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps" /v DumpType /t REG_DWORD /d 2 /f | Out-Host
           reg add "HKLM\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps" /v DumpCount /t REG_DWORD /d 5 /f | Out-Host
 
-          # 6) Launch the Win32 binary directly with stdout/stderr
-          # captured so we can see anything React Native prints
-          # before it aborts.
+          # 6) Launch the Win32 binary directly. Drop the stdout/stderr
+          # redirect — RNW is a GUI subsystem app, so the redirected
+          # files were always empty and the redirect may have been
+          # interfering with Start-Process. -PassThru gives us the
+          # Process object so we can confirm it actually spawned.
           $exe = Get-ChildItem -Path "apps/example/windows/x64/Debug" `
             -Filter "ReactApp.exe" -ErrorAction SilentlyContinue `
             | Select-Object -First 1
-          $logDir = "$env:GITHUB_WORKSPACE\reactapp-logs"
-          New-Item -ItemType Directory -Force -Path $logDir | Out-Null
           if ($exe) {
             Write-Host "Launching Win32 directly: $($exe.FullName)"
-            Start-Process -FilePath $exe.FullName `
-              -WorkingDirectory (Split-Path $exe.FullName) `
-              -RedirectStandardOutput "$logDir\stdout.log" `
-              -RedirectStandardError "$logDir\stderr.log"
+            try {
+              $proc = Start-Process -FilePath $exe.FullName `
+                -WorkingDirectory (Split-Path $exe.FullName) `
+                -PassThru
+              if ($proc) {
+                Write-Host "Started ReactApp PID=$($proc.Id) HasExited=$($proc.HasExited)"
+                Start-Sleep -Seconds 2
+                $alive = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
+                if ($alive) {
+                  Write-Host "PID=$($proc.Id) alive @+2s, ExitCode=$($alive.ExitCode), HasExited=$($alive.HasExited)"
+                } else {
+                  Write-Host "PID=$($proc.Id) gone @+2s, ExitCode=$($proc.ExitCode)"
+                }
+              }
+            } catch {
+              Write-Host "Start-Process failed: $_"
+            }
           } elseif ($pkg) {
             $aumid = "$($pkg.PackageFamilyName)!App"
             Write-Host "Launching via shell: $aumid"
